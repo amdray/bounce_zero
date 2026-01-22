@@ -20,6 +20,7 @@
 // Константы огибающей (~2-3 мс атака/релиз при 44.1 кГц)
 #define ATT_Q15  512   // ≈0.0156
 #define REL_Q15  512
+#define OTT_BUFFER_SIZE 16738  // Максимальный размер OTT буфера (как в оригинале)
 
 // Предвычисленная синусоидальная таблица (16-bit signed samples)
 static short g_sine_table[WAVETABLE_SIZE];
@@ -74,7 +75,7 @@ int get_bits(unsigned char *buffer, int *ptr, int *bitptr, int bits)
     int i;
 
     // Защита от чтения за границами буфера (размер 16738)
-    if (*ptr >= 16738 - 1) {
+    if (*ptr >= OTT_BUFFER_SIZE - 1) {
         return 0; // Возвращаем 0 если достигли конца буфера
     }
 
@@ -125,7 +126,7 @@ int parse_ringtone(unsigned char *buffer, int ptr, struct ott_info_t *ott_info)
 
     patterns = get_bits(buffer, &t, &bitptr, 8);
 
-    while (t < ptr && t < 16738 - 1)  // Дополнительная защита от переполнения
+    while (t < ptr && t < OTT_BUFFER_SIZE - 1)  // Дополнительная защита от переполнения
     {
         if (patterns == 0) break;
 
@@ -139,7 +140,7 @@ int parse_ringtone(unsigned char *buffer, int ptr, struct ott_info_t *ott_info)
 
         for (x = 0; x < count; x++)
         {
-            if (t >= ptr || t >= 16738 - 1) break; // Двойная проверка границ
+            if (t >= ptr || t >= OTT_BUFFER_SIZE - 1) break; // Двойная проверка границ
 
             k = get_bits(buffer, &t, &bitptr, 3);
             
@@ -195,14 +196,15 @@ int parse_ringtone(unsigned char *buffer, int ptr, struct ott_info_t *ott_info)
 // Extracted from parse_sckl.c - EXACT COPY with minimal modifications
 int parse_ott(FILE *in, struct ott_info_t *ott_info)
 {
-    unsigned char buffer[16738];
+    unsigned char buffer[OTT_BUFFER_SIZE];
     int ptr, ch;
 
     // Initialize structure
     memset(ott_info, 0, sizeof(struct ott_info_t));
+    memset(buffer, 0, sizeof(buffer));
     
     // Read file completely - EXACT COPY of original parse_ott
-    for (ptr = 0; ptr < 16738; ptr++)
+    for (ptr = 0; ptr < (int)sizeof(buffer); ptr++)
     {
         ch = getc(in);
         if (ch == EOF) break;

@@ -35,7 +35,7 @@ sprite_rect_t png_create_sprite_rect(texture_t* tex, int x, int y, int w, int h)
  * Ожидается: GU_TEXTURE_2D включён, GU_TCC_RGBA, BLEND включён; при необходимости — GU_ALPHA_TEST (A>0).
  * Рекомендуется: GU_ALPHA_TEST с порогом >0 для PNG с прозрачностью.
  */
-void png_draw_sprite(texture_t* tex, sprite_rect_t* sprite, float x, float y, float w, float h);
+void png_draw_sprite(texture_t* tex, sprite_rect_t* sprite, int x, int y, int w, int h);
 
 /**
  * Free texture memory
@@ -67,7 +67,7 @@ void png_draw_sprite_uv4(texture_t* tex,
                          float u_tr, float v_tr,
                          float u_bl, float v_bl,
                          float u_br, float v_br,
-                         float x, float y, float w, float h);
+                         int x, int y, int w, int h);
 
 /**
  * Draw sprite with a transform (rotation/mirror) applied to the given sprite rect.
@@ -75,8 +75,8 @@ void png_draw_sprite_uv4(texture_t* tex,
  * Рекомендуется: GU_ALPHA_TEST с порогом >0 для PNG с прозрачностью.
  */
 void png_draw_sprite_transform(texture_t* tex, sprite_rect_t* sprite,
-                               float x, float y, float w, float h,
-                               png_transform_t transform);
+                           int x, int y, int w, int h,
+                           png_transform_t transform);
 
 
 #endif // PNG_H

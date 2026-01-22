@@ -1,24 +1,29 @@
-# Bounce Zero (English)
+# Bounce Zero
 
-A port of the original **Bounce (2002, Java/Sun for Nokia 7210)** to the **PlayStation Portable (PSP)**.  
-The game logic is fully reimplemented in **C** while using only the original game assets from the Nokia version.  
-This project is for research/archival purposes; original content is not modified.
+Port of the original game **Bounce (2002, Java/Sun for Nokia 7210)** to **PlayStation Portable (PSP)**.  
+The game logic is fully reimplemented in **C**, using only the original assets from the Nokia phone version.  
+This project is for research purposes and does not modify the original content.
 
 ## Screenshots
+First screen  
 ![BOUN01179_00000](docs/screenshots/BOUN01179_00000.jpg)
+Main menu / pause menu  
 ![BOUN01179_00001](docs/screenshots/BOUN01179_00001.jpg)
+First level with HUD  
 ![BOUN01179_00002](docs/screenshots/BOUN01179_00002.jpg)
+Level select  
 ![BOUN01179_00003](docs/screenshots/BOUN01179_00003.jpg)
+Third level  
 ![BOUN01179_00004](docs/screenshots/BOUN01179_00004.jpg)
 
 ## Features
-- Reads and uses the original game data from the Bounce 2002 JAR (authentic resources only).
-- Full reimplementation of the game loop and core mechanics in C (no Java bytecode interpreter).
-- Works on real PSP hardware and in the PPSSPP emulator.
-- Minimal system requirements; no external runtime dependencies.
+- Reads and uses original game data from the 2002 JAR version of Bounce; includes the original Nokia 7210 font for authenticity
+- Full reimplementation of the game loop and physics
+- Compatible with real PSP hardware and the PPSSPP emulator
+- Minimal system requirements, no external dependencies
 
 ## Build
-Requires an installed [PSP SDK (pspdev)](https://github.com/pspdev/pspdev).
+You need [PSP SDK (pspdev)](https://github.com/pspdev/pspdev) installed.
 
 ```bash
 sudo apt-get update
@@ -30,29 +35,34 @@ export PATH="$PATH:$PSPDEV/bin"
 make
 ```
 
-The built file `EBOOT.PBP` will appear in the `release/` directory.
+The resulting `EBOOT.PBP` will appear in the `release/` directory.
+
+## Tools
+The `tools/` folder contains utilities for generating fonts and atlases from source text data.  
+These scripts are not required for building the game, but they are useful for reproducing the font pipeline.
+Documentation for these tools is available in `docs/font_txt_format.md`.
+There is also `tools/grid_watcher_1.py` for viewing/checking the tile grid.
 
 ## Run
-Copy the contents of the `release/` folder to the PSP memory stick:
+Copy the contents of `release/` to your PSP memory card:
 
 ```
 /PSP/GAME/BounceZero/
 ```
 
-Or open `EBOOT.PBP` with the PPSSPP emulator.
+Or open `EBOOT.PBP` in the PPSSPP emulator.
 
 ## Compatibility
-- PlayStation Portable (tested on 6.xx CFW)
-- PPSSPP emulator (recent versions)
+- PlayStation Portable 6.00 or higher
+- PPSSPP emulator
 
 ## License
-Source code is distributed under the **MIT** license.  
-All original materials (*Bounce, 2002*) are owned by **Nokia** and/or **Sun Microsystems** and are used solely for research purposes.
+The source code is licensed under **MIT**.  
+All original materials (*Bounce, 2002*) are owned by **Nokia** and/or **Sun Microsystems** and are used for research purposes only.
 
 ## About the experiment
-All source code was written with the **Claude AI** model as part of a **vibe-coding** experiment—building the game logic from behavior descriptions.  
-This project is non‑commercial and intended for research only.
 
----
-
-[Русская версия](README.md)
+All source code was written using the **Claude AI** model  
+as part of a **vibe-coding** experiment — building a game engine  
+from behavioral and logic descriptions without manual programming.  
+This project exists for research purposes only.

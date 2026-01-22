@@ -17,8 +17,8 @@ typedef enum {
 
 // Главное меню
 #define MAIN_MENU_TITLE_Y        50        // Позиция заголовка "Bounce"
-#define MAIN_MENU_PADDING_X      5.0f      // Горизонтальный отступ выделения
-#define MAIN_MENU_PADDING_Y      0.0f      // Вертикальный отступ выделения (0 = верх прямоугольника совпадает с y текста)
+#define MAIN_MENU_PADDING_X      5         // Горизонтальный отступ выделения
+#define MAIN_MENU_PADDING_Y      0         // Вертикальный отступ выделения (0 = верх прямоугольника совпадает с y текста)
 #define MAIN_MENU_SELECTION_BG_HEIGHT 25   // Высота подложки выделения
 
 // Экран выбора уровня
@@ -29,6 +29,7 @@ typedef enum {
 #define LEVEL_CELL_HEIGHT    30       // Высота ячейки уровня
 #define LEVEL_SPACING_X      50       // Расстояние между ячейками по X
 #define LEVEL_SPACING_Y      40       // Расстояние между ячейками по Y
+#define LEVEL_GRID_COLUMNS   5        // Количество колонок в сетке уровней
 #define LEVEL_HELP_Y         250      // Позиция текста помощи
 
 // Инициализация меню (загрузка текстур и т.д.)

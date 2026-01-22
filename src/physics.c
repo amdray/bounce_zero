@@ -18,12 +18,13 @@ static bool testTile(Player* p, int tileY, int tileX, bool canMove);
 static bool squareCollide(Player* p, int tileRow, int tileCol);
 static bool triangleCollide(Player* p, int tileRow, int tileCol, int tileID);
 static bool thinCollide(Player* p, int tileRow, int tileCol, int tileID);
+ 
 
-// Helper для получения тайла по центру мяча (Java/C координатная совместимость)
-// В Java xPos/yPos = центр мяча, в C = левый-верх, поэтому добавляем mHalfBallSize
+// Helper для получения тайла по центру мяча (Java-совместимая система координат)
+// Везде xPos/yPos = центр мяча, как в оригинале
 static inline void player_center_tile(const Player* p, int* tileX, int* tileY) {
-    *tileX = (p->xPos + p->mHalfBallSize) / TILE_SIZE;
-    *tileY = (p->yPos + p->mHalfBallSize) / TILE_SIZE;
+    *tileX = p->xPos / TILE_SIZE;
+    *tileY = p->yPos / TILE_SIZE;
 }
 static bool edgeCollide(Player* p, int tileRow, int tileCol, int tileID);
 static void redirectBall(Player* p, int tileID);
@@ -228,36 +229,35 @@ static bool squareCollide(Player* p, int tileRow, int tileCol) {
     int k = p->globalBallX - i;  // Java: int k = this.globalBallX - i
     int m = p->globalBallY - j;  // Java: int m = this.globalBallY - j
 
-    int b1, n, b2, i1;
+    int x_start, x_end, y_start, y_end;
 
-    // Java: if (k >= 0) { b1 = k; n = 12; } else { b1 = 0; n = this.ballSize + k; }
+    // Границы пересечения мяча с тайлом по X/Y (канон Java)
     if (k >= 0) {
-        b1 = k;
-        n = 12;
+        x_start = k;
+        x_end = 12;
     } else {
-        b1 = 0;
-        n = p->ballSize + k;
+        x_start = 0;
+        x_end = p->ballSize + k;
     }
 
-    // Java: if (m >= 0) { b2 = m; i1 = 12; } else { b2 = 0; i1 = this.ballSize + m; }
     if (m >= 0) {
-        b2 = m;
-        i1 = 12;
+        y_start = m;
+        y_end = 12;
     } else {
-        b2 = 0;
-        i1 = p->ballSize + m;
+        y_start = 0;
+        y_end = p->ballSize + m;
     }
 
     // Java: if (n > 12) n = 12; if (i1 > 12) i1 = 12;
-    if (n > 12) n = 12;
-    if (i1 > 12) i1 = 12;
+    if (x_end > 12) x_end = 12;
+    if (y_end > 12) y_end = 12;
 
     // Выбор маски мяча как в Java - разные типы для разных размеров
     if (p->ballSize == 16) {
         const uint8_t (*largeBallData)[16] = (const uint8_t (*)[16])LARGE_BALL_DATA;
         // Java: for (byte b3 = b1; b3 < n; b3++) for (byte b = b2; b < i1; b++)
-        for (int b3 = b1; b3 < n; b3++) {
-            for (int b = b2; b < i1; b++) {
+        for (int b3 = x_start; b3 < x_end; b3++) {
+            for (int b = y_start; b < y_end; b++) {
                 // Java: if (arrayOfByte[b - m][b3 - k] != 0) return true;
                 if (largeBallData[b - m][b3 - k] != 0) {
                     return true;
@@ -267,8 +267,8 @@ static bool squareCollide(Player* p, int tileRow, int tileCol) {
     } else {
         const uint8_t (*smallBallData)[12] = (const uint8_t (*)[12])SMALL_BALL_DATA;
         // Java: for (byte b3 = b1; b3 < n; b3++) for (byte b = b2; b < i1; b++)
-        for (int b3 = b1; b3 < n; b3++) {
-            for (int b = b2; b < i1; b++) {
+        for (int b3 = x_start; b3 < x_end; b3++) {
+            for (int b = y_start; b < y_end; b++) {
                 // Java: if (arrayOfByte[b - m][b3 - k] != 0) return true;
                 if (smallBallData[b - m][b3 - k] != 0) {
                     return true;
@@ -370,7 +370,7 @@ static void redirectBall(Player* p, int tileID) {
             
         case 31:
         case 33:
-            // Поворот на 90° с уменьшением пополам: (x,y) -> (y>>1, x>>1)
+            // Поворот на 90° с уменьшением пополам: (x,y) -> (y/2, x/2) (как в Java >> 1)
             p->xSpeed = (p->ySpeed >> 1);
             p->ySpeed = (oldXSpeed >> 1);
             break;
@@ -384,7 +384,7 @@ static void redirectBall(Player* p, int tileID) {
             
         case 30:
         case 32:
-            // Отражение с поворотом и уменьшением: (x,y) -> (-y>>1, -x>>1)
+            // Отражение с поворотом и уменьшением: (x,y) -> (-(y/2), -(x/2)) (как в Java >> 1)
             p->xSpeed = -(p->ySpeed >> 1);
             p->ySpeed = -(oldXSpeed >> 1);
             break;
@@ -400,40 +400,37 @@ static void redirectBall(Player* p, int tileID) {
 // Полная функция проверки коллизий (портировано из Ball.java)
 static bool collisionDetection(Player* p, int testX, int testY) {
     // Временно обновляем глобальные координаты для тестирования
-    int oldGlobalX = p->globalBallX;
-    int oldGlobalY = p->globalBallY;
-    p->globalBallX = testX;
-    p->globalBallY = testY;
-    
-    // Проверка границ уровня
-    int levelW = g_level.width * TILE_SIZE;
-    int levelH = g_level.height * TILE_SIZE;
-    
-    if (testX < 0 || testY < 0 || testX + p->ballSize > levelW || testY + p->ballSize > levelH) {
-        p->globalBallX = oldGlobalX;
-        p->globalBallY = oldGlobalY;
-        return false; // За границами - коллизия
+    int b = 0;
+    if (testY < 0) {
+        b = 12;
     }
     
-    // Определяем диапазон тайлов для проверки
-    int startTileX = testX / TILE_SIZE;
-    int endTileX = (testX + p->ballSize - 1) / TILE_SIZE;
-    int startTileY = testY / TILE_SIZE;
-    int endTileY = (testY + p->ballSize - 1) / TILE_SIZE;
+    // Определяем диапазон тайлов для проверки (как в Java i,j,k,m в порядке Java)
+    int i = (testX - p->mHalfBallSize) / TILE_SIZE;
+    int j = (testY - b - p->mHalfBallSize) / TILE_SIZE;
+    
+    // Устанавливаем globalBallX/Y для squareCollide/triangleCollide
+    p->globalBallX = testX - p->mHalfBallSize;
+    p->globalBallY = testY - p->mHalfBallSize;
+    
+    // Смещения прокрутки экрана (в C нет прокрутки, добавляем 0 для соответствия Java)
+    // В Java: if (this.xPos < this.mCanvas.divisorLine) { this.globalBallX += this.mCanvas.tileX * 12; ... }
+    // В C нет прокрутки экрана, поэтому добавляем 0 (как если бы tileX=tileY=0)
+    
+    // Определяем конец диапазона
+    int k = (testX - 1 + p->mHalfBallSize) / TILE_SIZE + 1;
+    int m = (testY - b - 1 + p->mHalfBallSize) / TILE_SIZE + 1;
     
     bool canMove = true;
 
-    // Проверяем все пересекающиеся тайлы
-    for (int tileY = startTileY; tileY <= endTileY && canMove; tileY++) {
-        for (int tileX = startTileX; tileX <= endTileX && canMove; tileX++) {
-            canMove = testTile(p, tileY, tileX, canMove);
+    // Проверяем все пересекающиеся тайлы (как в Java n, i1)
+    // Порядок обхода как в Java: X-снаружи, Y-внутри
+    // НЕ прерываем при canMove == false, чтобы корректно выставлялись флаги
+    for (int n = i; n < k; n++) {
+        for (int i1 = j; i1 < m; i1++) {
+            canMove = testTile(p, i1, n, canMove);
         }
     }
-    
-    
-    // Восстанавливаем старые глобальные координаты
-    p->globalBallX = oldGlobalX;
-    p->globalBallY = oldGlobalY;
     
     return canMove;
 }
@@ -645,9 +642,12 @@ void player_update(Player* p) {
         return; // Блокируем всю остальную физику во время анимации
     }
     
-    // Обновление глобальных координат для пиксельной коллизии
-    p->globalBallX = p->xPos;
-    p->globalBallY = p->yPos;
+    // Устанавливаем globalBallX/Y для текущей позиции перед первым update
+    // (для маленького мяча не вызывается в player_init, но нужен для первого collisionDetection)
+    if (p->globalBallX == 0 && p->globalBallY == 0) {
+        p->globalBallX = p->xPos - p->mHalfBallSize;
+        p->globalBallY = p->yPos - p->mHalfBallSize;
+    }
     
     // Определение параметров гравитации (точно как в Java 915-937)
     int gravity, gravityStep;
@@ -720,17 +720,19 @@ void player_update(Player* p) {
     
     // Ограничение максимальной скорости (Java 969-978)
     clamp_speed(p);
+
+    // Удалён неканоничный кламп X-скорости при вертикальном вводе
     
     // === ФИЗИКА ПО ОСИ Y === (Java 980-1069)
-    int ySteps = abs(p->ySpeed) / MOVEMENT_STEP_DIVISOR;
-    for (int i = 0; i < ySteps; i++) {
+    for (int i = 0; i < abs(p->ySpeed) / MOVEMENT_STEP_DIVISOR; i++) {
         int yStep = 0;
         if (p->ySpeed != 0) {
             yStep = (p->ySpeed < 0) ? -1 : 1;
         }
         
         // Попытка движения (Java 989)
-        if (collisionDetection(p, p->xPos, p->yPos + yStep)) {
+        bool canMoveY = collisionDetection(p, p->xPos, p->yPos + yStep);
+        if (canMoveY) {
             p->yPos += yStep;
             p->mGroundedFlag = false;
             
@@ -755,6 +757,7 @@ void player_update(Player* p) {
             }
         } else {
             // Коллизия - пытаемся скользить по рампе (Java 1011-1025)
+            // Канон Java: условие только по mCDRampFlag, xSpeed < 10 и slideCntr == 0
             if (p->mCDRampFlag && p->xSpeed < 10 && p->slideCntr == 0) {
                 int slideStep = 1;
                 if (collisionDetection(p, p->xPos + slideStep, p->yPos + yStep)) {
@@ -771,7 +774,8 @@ void player_update(Player* p) {
             // Отскок от препятствия (Java 1027-1055)
             if (yStep > 0 || (reverseGrav && yStep < 0)) {
                 // Отскок от пола/препятствия (Java: this.ySpeed = this.ySpeed * -1 / 2)
-                p->ySpeed = (p->ySpeed * -1) >> 1;
+                // ВАЖНО: умножение на -1 ДО деления даёт правильное округление к нулю
+                p->ySpeed = p->ySpeed * -1 / 2;
                 p->mGroundedFlag = true;
                 
                 // Резиновый отскок (Java 1032-1042)
@@ -861,8 +865,7 @@ void player_update(Player* p) {
     }
     
     // === ФИЗИКА ПО ОСИ X === (Java 1135-1166)
-    int xSteps = abs(p->xSpeed) / MOVEMENT_STEP_DIVISOR;
-    for (int i = 0; i < xSteps; i++) {
+    for (int i = 0; i < abs(p->xSpeed) / MOVEMENT_STEP_DIVISOR; i++) {
         int xStep = 0;
         if (p->xSpeed != 0) {
             xStep = (p->xSpeed < 0) ? -1 : 1;
@@ -888,30 +891,22 @@ void player_update(Player* p) {
             }
             // Если диагонали не сработали - отскок
             else {
-                p->xSpeed = -(p->xSpeed >> 1); // Java: -(this.xSpeed >> 1)
-
-                // Нормализация X-скорости после отскока (Java аналог)
-                if (p->xSpeed < MIN_BOUNCE_SPEED && p->xSpeed > -MIN_BOUNCE_SPEED) {
-                    p->xSpeed = (p->xSpeed < 0) ? -MIN_BOUNCE_SPEED : MIN_BOUNCE_SPEED;
-                }
+                // Java: this.xSpeed = -(this.xSpeed >> 1)
+                p->xSpeed = -(p->xSpeed >> 1);
             }
         } else {
             // Обычный отскок без рампы
             if (p->xSpeed != 0) {
-                p->xSpeed = -(p->xSpeed >> 1); // Java: -(this.xSpeed >> 1)
-
-                // Нормализация X-скорости после отскока (Java аналог)
-                if (p->xSpeed < MIN_BOUNCE_SPEED && p->xSpeed > -MIN_BOUNCE_SPEED) {
-                    p->xSpeed = (p->xSpeed < 0) ? -MIN_BOUNCE_SPEED : MIN_BOUNCE_SPEED;
-                }
+                // Java: this.xSpeed = -(this.xSpeed >> 1)
+                p->xSpeed = -(p->xSpeed >> 1);
             }
         }
     }
 
     // Границы уровня
     int levelW = g_level.width * TILE_SIZE;
-    if (p->xPos < 0) p->xPos = 0;
-    if (p->xPos > levelW - p->ballSize) p->xPos = levelW - p->ballSize;
+    if (p->xPos < p->mHalfBallSize) p->xPos = p->mHalfBallSize;
+    if (p->xPos > levelW - p->mHalfBallSize) p->xPos = levelW - p->mHalfBallSize;
 }
 
 static bool rectCollide(int x1, int y1, int x2, int y2, int rx1, int ry1, int rx2, int ry2) {
@@ -1057,4 +1052,3 @@ static bool edgeCollide(Player* p, int tileRow, int tileCol, int tileID) {
             return false;
     }
 }
-

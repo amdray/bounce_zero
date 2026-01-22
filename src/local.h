@@ -41,9 +41,7 @@ const char* local_get_text(int string_id);
 // ВАЖНО: Использует тот же статический буфер, что и local_get_text()!
 const char* local_get_text_with_params(int string_id, const char** params, int param_count);
 
-// Дополнительные функции для строк, отсутствующих в lang файлах
-const char* local_text_select_level(void);
-const char* local_text_settings(void);
+const char* local_get_lang(void);
 
 
 #ifdef __cplusplus

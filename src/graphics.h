@@ -86,17 +86,17 @@ void graphics_draw_rect(float x, float y, float w, float h, u32 color);
  * @param y Y координата левого верхнего угла текста
  * @param text Строка для отображения
  * @param color Цвет текста в формате ABGR (тот же что и в graphics_clear())
- * @param font_height Высота шрифта: 9 (font9), 12 (font12lite), или 23 (font23)
+ * @param font_height Высота шрифта: 9 (font9), 12 (font12), или 23 (font23)
  */
 void graphics_draw_text(float x, float y, const char* text, u32 color, int font_height);
 
 /**
  * Измерить ширину текста для выбранного шрифта
  * @param text Строка для измерения
- * @param font_height Высота шрифта: 9 (font9), 12 (font12lite), или 23 (font23)
+ * @param font_height Высота шрифта: 9 (font9), 12 (font12), или 23 (font23)
  * @return Ширина текста в пикселях
  */
-float graphics_measure_text(const char* text, int font_height);
+int graphics_measure_text(const char* text, int font_height);
 
 /**
  * Нарисовать число используя font24 (только цифры 0-9)
@@ -112,24 +112,17 @@ void graphics_draw_number(float x, float y, int number, u32 color);
  * @param number Число для измерения
  * @return Ширина числа в пикселях
  */
-float graphics_measure_number(int number);
+int graphics_measure_number(int number);
 
-/**
- * Нарисовать иконку кнопки X (PSP)
- * @param x X координата центра кнопки
- * @param y Y координата центра кнопки
- * @param radius Радиус кнопки
- */
-void graphics_draw_button_x(float x, float y, float radius);
 
 
 /**
- * Декодировать UTF-8 символ прямо в индекс таблицы font9
+ * Декодировать UTF-8 символ в Unicode codepoint
  * @param str UTF-8 строка
  * @param bytes_read Количество прочитанных байт
- * @return Индекс в таблице font9 (0-193) или 32 (пробел) для неизвестных
+ * @return Unicode codepoint, для ошибки возвращает пробел U+0020
  */
-int utf8_decode_to_index(const char* str, int* bytes_read);
+int utf8_decode_to_codepoint(const char* str, int* bytes_read);
 
 /**
  * Единое управление состоянием текстур
@@ -147,6 +140,8 @@ int graphics_get_texturing_state(void);    // получить текущее с
 void graphics_bind_texture(texture_t* tex);         // Привязать текстуру для batch'а
 void graphics_batch_sprite(float u1, float v1, float u2, float v2, 
                           float x, float y, float w, float h); // Добавить спрайт в batch
+void graphics_batch_sprite_colored(float u1, float v1, float u2, float v2,
+                          float x, float y, float w, float h, u32 color); // Для текста/модуляции (GU_TFX_MODULATE)
 void graphics_flush_batch(void);                    // Принудительно отрисовать накопленные спрайты
 
 

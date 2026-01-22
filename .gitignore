@@ -3,23 +3,15 @@ original_code/
 release/
 
 bounce_save.dat
-grid_watcher_1.py
-glyphs23.txt
-glyphs16.txt
-glyphs12lite.txt
-glyphs9.txt
-glyphs1.txt
-glyphs.txt
-glyphs 2.txt
+glyphs24.txt
+glyphs16b.txt
 
-convert_font12lite.py
-convert_font16.py
-convert_font23.py
-convert_font24.py
-convert_font9.py
+
 
 .vscode/
 .claude/
 
 src/*.o
 src/*.d
+
+PARAM.SFO

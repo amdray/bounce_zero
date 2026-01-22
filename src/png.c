@@ -218,19 +218,13 @@ texture_t* png_load_texture_vram(const char* path) {
     // Очищаем память текстуры
     memset(tex->data, 0, tex_size);
     
-    // Копируем данные изображения в текстуру
+    // Копируем данные изображения в текстуру (строками быстрее, чем по пикселям)
     unsigned char* dest = (unsigned char*)tex->data;
+    size_t row_bytes = (size_t)width * 4;
     for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            int src_idx = (y * width + x) * 4;
-            int dst_idx = (y * tex_width + x) * 4;
-            
-            // Копируем RGBA байты как есть (укладка соответствует GU_PSM_8888 на PSP)
-            dest[dst_idx + 0] = image_data[src_idx + 0]; // R
-            dest[dst_idx + 1] = image_data[src_idx + 1]; // G
-            dest[dst_idx + 2] = image_data[src_idx + 2]; // B
-            dest[dst_idx + 3] = image_data[src_idx + 3]; // A
-        }
+        memcpy(dest + (size_t)y * (size_t)tex_width * 4,
+               image_data + (size_t)y * row_bytes,
+               row_bytes);
     }
     
     // Cache writeback для RAM текстур
@@ -276,7 +270,7 @@ sprite_rect_t png_create_sprite_rect(texture_t* tex, int x, int y, int w, int h)
     return rect;
 }
 
-void png_draw_sprite(texture_t* tex, sprite_rect_t* sprite, float x, float y, float w, float h) {
+void png_draw_sprite(texture_t* tex, sprite_rect_t* sprite, int x, int y, int w, int h) {
     if (!tex || !sprite || !tex->data) return;
     if (tex->width <= 0 || tex->height <= 0) return;
     if (w <= 0 || h <= 0) return;
@@ -289,7 +283,7 @@ void png_draw_sprite(texture_t* tex, sprite_rect_t* sprite, float x, float y, fl
     
     // Используем исправленную batch систему (с копированием в GE память)
     graphics_bind_texture(tex);  // Автоматически flush'нет если текстура изменилась
-    graphics_batch_sprite(u1, v1, u2, v2, x, y, w, h);  // Добавляем в batch
+    graphics_batch_sprite(u1, v1, u2, v2, (float)x, (float)y, (float)w, (float)h);  // Добавляем в batch
 }
 
 void png_free_texture(texture_t* tex) {
@@ -308,7 +302,7 @@ void png_draw_sprite_uv4(texture_t* tex,
                          float u_tr, float v_tr,
                          float u_bl, float v_bl,
                          float u_br, float v_br,
-                         float x, float y, float w, float h)
+                         int x, int y, int w, int h)
 {
     if (!tex || !tex->data) return;
     if (w <= 0 || h <= 0) return;
@@ -331,16 +325,16 @@ void png_draw_sprite_uv4(texture_t* tex,
 
     // Top-left
     v[0].u = u_tl; v[0].v = v_tl;
-    v[0].x = x;    v[0].y = y;    v[0].z = 0.0f;
+    v[0].x = (float)x;    v[0].y = (float)y;    v[0].z = 0.0f;
     // Top-right
     v[1].u = u_tr; v[1].v = v_tr;
-    v[1].x = x + w; v[1].y = y;   v[1].z = 0.0f;
+    v[1].x = (float)(x + w); v[1].y = (float)y;   v[1].z = 0.0f;
     // Bottom-left
     v[2].u = u_bl; v[2].v = v_bl;
-    v[2].x = x;    v[2].y = y + h; v[2].z = 0.0f;
+    v[2].x = (float)x;    v[2].y = (float)(y + h); v[2].z = 0.0f;
     // Bottom-right
     v[3].u = u_br; v[3].v = v_br;
-    v[3].x = x + w; v[3].y = y + h; v[3].z = 0.0f;
+    v[3].x = (float)(x + w); v[3].y = (float)(y + h); v[3].z = 0.0f;
 
     // Синхронизация с batch системой
     graphics_flush_batch();
@@ -354,7 +348,7 @@ void png_draw_sprite_uv4(texture_t* tex,
 }
 
 void png_draw_sprite_transform(texture_t* tex, sprite_rect_t* sprite,
-                           float x, float y, float w, float h,
+                           int x, int y, int w, int h,
                            png_transform_t transform)
 {
     if (!tex || !sprite) return;
@@ -413,5 +407,6 @@ void png_draw_sprite_transform(texture_t* tex, sprite_rect_t* sprite,
     const float bl_u = U[idx[2]], bl_v = V[idx[2]];
     const float br_u = U[idx[3]], br_v = V[idx[3]];
 
-    png_draw_sprite_uv4(tex, tl_u, tl_v, tr_u, tr_v, bl_u, bl_v, br_u, br_v, x, y, w, h);
+    png_draw_sprite_uv4(tex, tl_u, tl_v, tr_u, tr_v, bl_u, bl_v, br_u, br_v,
+                        x, y, w, h);
 }

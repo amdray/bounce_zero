@@ -16,7 +16,7 @@ void input_init(void);
 
 /**
  * Обновить состояние контроллера
- * Должна вызываться каждый кадр для корректной работы input_pressed()
+ * Должна вызываться каждый кадр для корректной работы input_pressed()/input_held()
  */
 void input_update(void);
 
@@ -40,6 +40,30 @@ bool input_held(unsigned int button);
  * @return true если кнопка только что была отпущена, иначе false
  */
 bool input_released(unsigned int button);
+
+/**
+ * Получить и сбросить событие нажатия (edge)
+ * Используется для фиксированного тика, чтобы не дублировать нажатия
+ */
+bool input_consume_pressed(unsigned int button);
+
+/**
+ * Получить и сбросить событие отпускания (edge)
+ * Используется для фиксированного тика, чтобы не дублировать отпускания
+ */
+bool input_consume_released(unsigned int button);
+
+/**
+ * Сбросить накопленные edge-события
+ * Полезно при смене состояния игры
+ */
+void input_reset_edges(void);
+
+/**
+ * Заблокировать уже зажатые кнопки до их отпускания
+ * Нужен, чтобы после респауна удержание не считалось новым вводом
+ */
+void input_lock_held(void);
 
 #ifdef __cplusplus
 }

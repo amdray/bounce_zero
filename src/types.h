@@ -150,7 +150,7 @@ typedef uint8_t MoveMask;
 // ПРИМЕЧАНИЕ: Все целочисленные поля используют int для точного соответствия Java,
 // сохраняя идентичную целочисленную математику без риска сужений типов
 typedef struct {
-    // Позиция в экранных координатах (пиксели) - как в Java (int)
+    // Позиция в экранных координатах (пиксели), центр мяча - как в Java (int)
     int xPos, yPos;
     
     // Глобальные координаты для точных коллизий (как в Ball.java)
@@ -209,11 +209,6 @@ typedef struct {
     int numLives;             // Количество жизней (начинается с 3, максимум 5)
     // Анимация двери теперь управляется из game.c
     
-    // Буферы input'ов между тиками физики
-    // Хранятся в Game, а не в Player, для разделения ввода и физики
-    int buffered_jump;         // Нажатие прыжка
-    int buffered_jump_released; // Отпускание прыжка
-    
     // Отладочные флаги
     bool invincible_cheat;      // Читерское бессмертие (как mInvincible в Java)
     
@@ -230,6 +225,7 @@ typedef struct {
 
     // Флаг нового рекорда (как mNewBestScore в оригинале BounceUI.java:33)
     bool new_best_score;        // true если текущая игра установила новый рекорд
+
 } Game;
 
 extern Game g_game;
@@ -262,6 +258,7 @@ typedef struct {
 // Функции сохранений
 void save_init(void);                              // Инициализация, загрузка данных
 void save_shutdown(void);                          // Очистка ресурсов
+void save_flush(void);                             // Принудительное сохранение
 void save_update_records(int level, int score);    // Обновить рекорды если нужно
 SaveData* save_get_data(void);                     // Получить текущие рекорды
 

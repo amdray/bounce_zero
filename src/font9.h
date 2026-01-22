@@ -17,7 +17,7 @@ extern "C" {
 #define FONT9_CYRILLIC_LOWER_START 161  // а-я
 
 typedef struct {
-    u8 row[FONT9_HEIGHT];  // 9 строк пиксельных данных
+    u16 row[FONT9_HEIGHT];  // 9 строк пиксельных данных (до 16 пикселей ширины)
     u8 width;         // Ширина символа в пикселях
 } Glyph9;
 

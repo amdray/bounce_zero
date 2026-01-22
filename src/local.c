@@ -23,18 +23,30 @@ static void detect_phone_language(void) {
         return;
     }
 
-    switch (language) {
-        case PSP_SYSTEMPARAM_LANGUAGE_RUSSIAN:
-            strcpy(s_phone_lang, "ru-RU");
-            break;
-        case PSP_SYSTEMPARAM_LANGUAGE_GERMAN:
-            strcpy(s_phone_lang, "de");
-            break;
-        case PSP_SYSTEMPARAM_LANGUAGE_ENGLISH:
-        default:
-            strcpy(s_phone_lang, "xx");
-            break;
+    static const struct {
+        int lang_id;
+        const char* code;
+    } k_lang_map[] = {
+        { PSP_SYSTEMPARAM_LANGUAGE_ENGLISH, "xx"    },
+        { PSP_SYSTEMPARAM_LANGUAGE_GERMAN,  "de"    },
+        { PSP_SYSTEMPARAM_LANGUAGE_RUSSIAN, "ru-RU" }
+    };
+
+    for (size_t i = 0; i < sizeof(k_lang_map) / sizeof(k_lang_map[0]); ++i) {
+        if (k_lang_map[i].lang_id == language) {
+            strcpy(s_phone_lang, k_lang_map[i].code);
+            return;
+        }
     }
+
+    strcpy(s_phone_lang, "xx");
+}
+
+const char* local_get_lang(void) {
+    if (strcmp(s_phone_lang, "xx") == 0) {
+        detect_phone_language();
+    }
+    return s_phone_lang;
 }
 
 // Загрузка всех строк в кэш при первом обращении
@@ -238,19 +250,6 @@ const char* local_get_text_with_params(int string_id, const char** params, int p
     return result_buffer;
 }
 
-// Дополнительные функции для строк, отсутствующих в lang файлах
-const char* local_text_select_level(void) {
-    if (strncmp(s_phone_lang, "ru", 2) == 0) {
-        return "Выбор уровня";
-    }
-    return "Select level";
-}
-
-const char* local_text_settings(void) {
-    if (strncmp(s_phone_lang, "ru", 2) == 0) {
-        return "Настройки";
-    }
-    return "Settings";
-}
+// Дополнительные строки вынесены в local_extra.c
 
 

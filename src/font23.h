@@ -17,7 +17,7 @@ extern "C" {
 #define FONT23_CYRILLIC_LOWER_START 161  // а-я
 
 typedef struct {
-    u16 row[FONT23_HEIGHT];  // 23 строки пиксельных данных (до 16 пикселей ширины)
+    u32 row[FONT23_HEIGHT];  // 23 строки пиксельных данных (до 32 пикселей ширины)
     u8 width;          // Ширина символа в пикселях
 } Glyph23;
 

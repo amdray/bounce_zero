@@ -1,5 +1,5 @@
 TARGET = Bounce
-OBJS = src/main.o src/graphics.o src/input.o src/game.o src/physics.o src/level.o src/png.o src/font9.o src/font12lite.o src/font23.o src/font24.o src/menu.o src/tile_table.o src/sound.o src/save.o src/local.o
+OBJS = src/main.o src/graphics.o src/input.o src/game.o src/physics.o src/level.o src/png.o src/font_atlas.o src/font9_atlas.o src/font12_atlas.o src/font23_atlas.o src/font9.o src/font12.o src/font23.o src/font24.o src/menu.o src/tile_table.o src/sound.o src/save.o src/local.o src/local_extra.o src/splash.o
 
 INCDIR = src/
 CFLAGS = -O2 -G0 -Wall -Wextra -Wshadow -Wfloat-conversion -Werror=implicit-function-declaration -std=c99 -MMD -MP -Isrc
@@ -15,6 +15,7 @@ EXTRA_TARGETS = EBOOT.PBP
 PSP_EBOOT_TITLE = Bounce
 PSP_EBOOT_ICON  = ICON0.PNG
 PSP_EBOOT_PIC1  = PIC1.PNG
+SFOFLAGS += -d DISC_ID=BZERO0001
 
 PSPSDK = $(shell psp-config --pspsdk-path)
 include $(PSPSDK)/lib/build.mak

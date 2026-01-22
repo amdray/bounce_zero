@@ -17,7 +17,7 @@
 static int s_respawn_x = 0, s_respawn_y = 0;
 
 // Формат пути к файлам уровней
-#define LEVEL_PATH_FORMAT "/levels/J2MElvl.%03d"
+#define LEVEL_PATH_FORMAT "levels/J2MElvl.%03d"
 
 // Параметры полосок EXIT тайла (двери)
 #define EXIT_STRIPE_1_X      0    // Первая полоска (фон)
@@ -88,9 +88,9 @@ static void hoop_fg_flush(void){
         sprite_rect_t r = png_create_sprite_rect(s_tileset, srcX, srcY, TILE_SIZE, TILE_SIZE);
         png_transform_t xf = map_tf_to_png(s_hoop_fg[i].transform); // alt_transform now used from queue
         if (xf == PNG_TRANSFORM_IDENTITY){
-            png_draw_sprite(s_tileset, &r, s_hoop_fg[i].x, s_hoop_fg[i].y, (float)TILE_SIZE, (float)TILE_SIZE);
+            png_draw_sprite(s_tileset, &r, (int)s_hoop_fg[i].x, (int)s_hoop_fg[i].y, TILE_SIZE, TILE_SIZE);
         } else {
-            png_draw_sprite_transform(s_tileset, &r, s_hoop_fg[i].x, s_hoop_fg[i].y, (float)TILE_SIZE, (float)TILE_SIZE, xf);
+            png_draw_sprite_transform(s_tileset, &r, (int)s_hoop_fg[i].x, (int)s_hoop_fg[i].y, TILE_SIZE, TILE_SIZE, xf);
         }
     }
     s_hoop_fg_count = 0;
@@ -194,8 +194,9 @@ int level_load_from_memory(const char* levelData, int dataSize) {
     int mapBytes = g_level.width * g_level.height;
     if (offset + mapBytes > dataSize) return 0;
 
-    g_level.startPosX = startX_tiles * TILE_SIZE;
-    g_level.startPosY = startY_tiles * TILE_SIZE;
+    int start_half = (g_level.ballSize == BALL_SIZE_SMALL) ? HALF_NORMAL_SIZE : HALF_ENLARGED_SIZE;
+    g_level.startPosX = startX_tiles * TILE_SIZE + start_half;
+    g_level.startPosY = startY_tiles * TILE_SIZE + start_half;
     g_level.startTileX = startX_tiles;
     g_level.startTileY = startY_tiles;
 
@@ -249,176 +250,127 @@ int level_get_tile_at(int tileX, int tileY) {
 
 // --- Новые функции рендеринга ---
 
-// Рендер EXIT тайла (24x24 окно из 48px источника)
-static void render_exit_tile(int tile_id, float destX, float destY, int worldTileX, int worldTileY) {
-    // Используем переданные параметры (camera больше не нужны)
-    
+// Рендер EXIT тайла: фоновые полоски (plain pass)
+static void render_exit_tile_plain(int tile_id, float destX, float destY, int worldTileX, int worldTileY) {
     if (tile_id == 9) { // EXIT - новая логика по якорю exitPos
-        
-        // 2. Рисуем статичные полоски (фон) - только левый верхний тайл
         int local_x = worldTileX - g_level.exitPosX;
         int local_y = worldTileY - g_level.exitPosY;
-        
+
         if (local_x == 0 && local_y == 0) {
             // Только левый верхний тайл рисует фон для всей области 2x2
-            // Правильные цвета и порядок из Java createExitImage
-            u32 background = BACKGROUND_COLOUR;  // фон уровня (как в Java this.mBackgroundColour)
-            u32 first_stripe = BACKGROUND_COLOUR; // 11591920 → BACKGROUND_COLOUR (legacy, see level.h:35)
-            u32 light_stripe = EXIT_LIGHT_STRIPE_COLOUR;   // Java 16555422
-            u32 dark_stripe = EXIT_DARK_STRIPE_COLOUR;     // Java 14891583
-            u32 fourth_stripe = EXIT_FOURTH_STRIPE_COLOUR; // Java 12747918
-            
-            float area_width = 2.0f * TILE_SIZE;   // 24 пикселя (TILE_SIZE=12)
-            float area_height = 2.0f * TILE_SIZE;  // 24 пикселя
+            u32 background = BACKGROUND_COLOUR;
+            u32 first_stripe = BACKGROUND_COLOUR;
+            u32 light_stripe = EXIT_LIGHT_STRIPE_COLOUR;
+            u32 dark_stripe = EXIT_DARK_STRIPE_COLOUR;
+            u32 fourth_stripe = EXIT_FOURTH_STRIPE_COLOUR;
 
-            // Переключаемся в plain режим для рисования полосок
-            if (graphics_get_texturing_state() != 0) {
-                graphics_begin_plain();
-            }
+            float area_width = 2.0f * TILE_SIZE;
+            float area_height = 2.0f * TILE_SIZE;
 
-            graphics_draw_rect(destX, destY, area_width, area_height, background);    // фон уровня
+            graphics_draw_rect(destX, destY, area_width, area_height, background);
             graphics_draw_rect(destX + EXIT_STRIPE_1_X, destY, (float)EXIT_STRIPE_1_WIDTH, area_height, first_stripe);
             graphics_draw_rect(destX + EXIT_STRIPE_2_X, destY, (float)EXIT_STRIPE_2_WIDTH, area_height, light_stripe);
             graphics_draw_rect(destX + EXIT_STRIPE_3_X, destY, (float)EXIT_STRIPE_3_WIDTH, area_height, dark_stripe);
             graphics_draw_rect(destX + EXIT_STRIPE_4_X, destY, (float)EXIT_STRIPE_4_WIDTH, area_height, fourth_stripe);
         }
-        
-        // 3. Рисуем движущиеся части двери - только от главного тайла
-        if (local_x == 0 && local_y == 0) {
-            // Рисуем все 4 части двери из главного тайла
-            if ((uint32_t)tile_id >= tile_meta_count()) return;
-            const TileMeta* t = &tile_meta_db()[tile_id];
-            const int col = t->sprite_index % s_tiles_per_row;
-            const int row = t->sprite_index / s_tiles_per_row;
-            
-            int srcX = col * TILE_SIZE;
-            int srcY = row * TILE_SIZE;
-            sprite_rect_t r = png_create_sprite_rect(s_tileset, srcX, srcY, TILE_SIZE, TILE_SIZE);
-            
-            int animationOffset = game_exit_anim_offset();
-            float doorX = destX;
-            float doorY = destY - animationOffset;
-            
-            // Clipping: дверь не должна выходить за границы области 2x2
-            float areaTop = destY;
-            
-            // Рисуем 4 части двери с clipping:
-            if (doorY < areaTop) {
-                // Дверь поднялась - нужен clipping
-                float clipOffset = areaTop - doorY;
-                if (clipOffset < TILE_SIZE) {
-                    float visibleHeight = TILE_SIZE - clipOffset;
-                    sprite_rect_t clipped_r = png_create_sprite_rect(s_tileset, srcX, srcY + (int)clipOffset, TILE_SIZE, (int)visibleHeight);
-
-                    // Переключаемся в textured режим для рисования спрайтов
-                    if (graphics_get_texturing_state() == 0) {
-                        graphics_begin_textured();
-                    }
-
-                    // (0,0) - главный тайл с clipping
-                    png_draw_sprite(s_tileset, &clipped_r, doorX, areaTop, (float)TILE_SIZE, visibleHeight);
-                    
-                    // (1,0) - правый верхний с clipping  
-                    png_draw_sprite_transform(s_tileset, &clipped_r, doorX + TILE_SIZE, areaTop, (float)TILE_SIZE, visibleHeight, PNG_TRANSFORM_FLIP_X);
-                    
-                    // (0,1) и (1,1) остаются без clipping если дверь не поднялась слишком высоко
-                    if (doorY + TILE_SIZE >= areaTop) {
-                        png_draw_sprite_transform(s_tileset, &r, doorX, doorY + TILE_SIZE, (float)TILE_SIZE, (float)TILE_SIZE, PNG_TRANSFORM_FLIP_Y);
-                        png_draw_sprite_transform(s_tileset, &r, doorX + TILE_SIZE, doorY + TILE_SIZE, (float)TILE_SIZE, (float)TILE_SIZE, PNG_TRANSFORM_ROT_180);
-                    }
-                }
-            } else {
-                // Дверь полностью видна - рисуем без clipping
-                // Переключаемся в textured режим для рисования спрайтов
-                if (graphics_get_texturing_state() == 0) {
-                    graphics_begin_textured();
-                }
-
-                png_draw_sprite(s_tileset, &r, doorX, doorY, (float)TILE_SIZE, (float)TILE_SIZE);
-                png_draw_sprite_transform(s_tileset, &r, doorX + TILE_SIZE, doorY, (float)TILE_SIZE, (float)TILE_SIZE, PNG_TRANSFORM_FLIP_X);
-                png_draw_sprite_transform(s_tileset, &r, doorX, doorY + TILE_SIZE, (float)TILE_SIZE, (float)TILE_SIZE, PNG_TRANSFORM_FLIP_Y);
-                png_draw_sprite_transform(s_tileset, &r, doorX + TILE_SIZE, doorY + TILE_SIZE, (float)TILE_SIZE, (float)TILE_SIZE, PNG_TRANSFORM_ROT_180);
-            }
-        }
-    } else if (tile_id == 10) { // Движущиеся шипы - НЕ рендерим здесь, они рендерятся отдельно
-        // Движущиеся шипы обрабатываются в render_moving_spikes_tile
-        // Здесь просто рисуем фон
-        graphics_draw_rect(destX, destY, (float)TILE_SIZE, (float)TILE_SIZE, WATER_COLOUR); // темный фон
+    } else if (tile_id == 10) {
+        graphics_draw_rect(destX, destY, (float)TILE_SIZE, (float)TILE_SIZE, WATER_COLOUR);
     } else {
-        // Фоллбэк для неизвестных составных тайлов
         graphics_draw_rect(destX, destY, (float)TILE_SIZE, (float)TILE_SIZE, 0xFF888888);
     }
 }
 
-// Рендер движущихся шипов (case 10) с учетом смещения
-static void render_moving_spikes_tile(int tileX, int tileY, float destX, float destY) {
-    // Получаем флаги тайла для определения цвета фона
+// Рендер EXIT тайла: спрайты двери (textured pass)
+static void render_exit_tile_textured(int tile_id, float destX, float destY, int worldTileX, int worldTileY) {
+    if (tile_id != 9) return;
+
+    int local_x = worldTileX - g_level.exitPosX;
+    int local_y = worldTileY - g_level.exitPosY;
+
+    if (local_x != 0 || local_y != 0) return;
+    if ((uint32_t)tile_id >= tile_meta_count()) return;
+    if (!s_tileset || s_tiles_per_row <= 0) return;
+
+    const TileMeta* t = &tile_meta_db()[tile_id];
+    const int col = t->sprite_index % s_tiles_per_row;
+    const int row = t->sprite_index / s_tiles_per_row;
+
+    int srcX = col * TILE_SIZE;
+    int srcY = row * TILE_SIZE;
+    sprite_rect_t r = png_create_sprite_rect(s_tileset, srcX, srcY, TILE_SIZE, TILE_SIZE);
+
+    int animationOffset = game_exit_anim_offset();
+    float doorX = destX;
+    float doorY = destY - animationOffset;
+    float areaTop = destY;
+
+    if (doorY < areaTop) {
+        float clipOffset = areaTop - doorY;
+        if (clipOffset < TILE_SIZE) {
+            float visibleHeight = TILE_SIZE - clipOffset;
+            sprite_rect_t clipped_r = png_create_sprite_rect(s_tileset, srcX, srcY + (int)clipOffset, TILE_SIZE, (int)visibleHeight);
+
+            png_draw_sprite(s_tileset, &clipped_r, (int)doorX, (int)areaTop, TILE_SIZE, (int)visibleHeight);
+            png_draw_sprite_transform(s_tileset, &clipped_r, (int)(doorX + TILE_SIZE), (int)areaTop, TILE_SIZE, (int)visibleHeight, PNG_TRANSFORM_FLIP_X);
+
+            if (doorY + TILE_SIZE >= areaTop) {
+                png_draw_sprite_transform(s_tileset, &r, (int)doorX, (int)(doorY + TILE_SIZE), TILE_SIZE, TILE_SIZE, PNG_TRANSFORM_FLIP_Y);
+                png_draw_sprite_transform(s_tileset, &r, (int)(doorX + TILE_SIZE), (int)(doorY + TILE_SIZE), TILE_SIZE, TILE_SIZE, PNG_TRANSFORM_ROT_180);
+            }
+        }
+    } else {
+        png_draw_sprite(s_tileset, &r, (int)doorX, (int)doorY, TILE_SIZE, TILE_SIZE);
+        png_draw_sprite_transform(s_tileset, &r, (int)(doorX + TILE_SIZE), (int)doorY, TILE_SIZE, TILE_SIZE, PNG_TRANSFORM_FLIP_X);
+        png_draw_sprite_transform(s_tileset, &r, (int)doorX, (int)(doorY + TILE_SIZE), TILE_SIZE, TILE_SIZE, PNG_TRANSFORM_FLIP_Y);
+        png_draw_sprite_transform(s_tileset, &r, (int)(doorX + TILE_SIZE), (int)(doorY + TILE_SIZE), TILE_SIZE, TILE_SIZE, PNG_TRANSFORM_ROT_180);
+    }
+}
+
+// Рендер движущихся шипов: фон тайла (plain pass)
+static void render_moving_spikes_tile_plain(int tileX, int tileY, float destX, float destY) {
     unsigned int tile = (unsigned short)g_level.tileMap[tileY][tileX];
     bool is_water = (tile & TILE_FLAG_WATER) ? true : false;
-    u32 bg_color = is_water ? WATER_COLOUR : BACKGROUND_COLOUR;  // вода : обычный фон
-    // Ищем движущийся объект для данного тайла
+    u32 bg_color = is_water ? WATER_COLOUR : BACKGROUND_COLOUR;
+    graphics_draw_rect(destX, destY, (float)TILE_SIZE, (float)TILE_SIZE, bg_color);
+}
+
+// Рендер движущихся шипов: спрайты (textured pass)
+static void render_moving_spikes_tile_textured(int tileX, int tileY, float destX, float destY) {
     int objIndex = level_find_moving_object_at(tileX, tileY);
-    if (objIndex == -1) {
-        // Если объект не найден, рисуем обычный фон
-        // Переключаемся на plain только если нужно (минимизируем переключения)
-        if (graphics_get_texturing_state() != 0) {
-            graphics_begin_plain();
-        }
-        graphics_draw_rect(destX, destY, (float)TILE_SIZE, (float)TILE_SIZE, bg_color);
-        return;
-    }
-    
+    if (objIndex == -1) return;
+    if (!s_tileset || s_tiles_per_row <= 0) return;
+    if (10 >= tile_meta_count()) return;
+
     MovingObject* obj = &g_level.movingObjects[objIndex];
-    
-    // Вычисляем относительную позицию тайла внутри области объекта
     int relTileX = tileX - obj->topLeft[0];
     int relTileY = tileY - obj->topLeft[1];
-    
-    // Рисуем фон тайла - переключаемся на plain только если нужно
-    if (graphics_get_texturing_state() != 0) {
-        graphics_begin_plain();
-    }
-    graphics_draw_rect(destX, destY, (float)TILE_SIZE, (float)TILE_SIZE, bg_color);
-    
-    // Переключаемся обратно на textured для спрайтов
-    if (graphics_get_texturing_state() != 1) {
-        graphics_begin_textured();
-    }
-    
-    // Вычисляем смещение движущегося изображения
+
     float offsetX = (float)obj->offset[0] - (float)(relTileX * TILE_SIZE);
     float offsetY = (float)obj->offset[1] - (float)(relTileY * TILE_SIZE);
-    
-    // Проверяем, попадает ли часть движущегося изображения в этот тайл
-    // Движущееся изображение 24x24 пикселя (2x2 тайла)
+
     if (offsetX > -3 * TILE_SIZE && offsetX < TILE_SIZE && offsetY > -3 * TILE_SIZE && offsetY < TILE_SIZE) {
-        // Получаем базовый спрайт для шипов (атлас[13])
-        if (10 >= tile_meta_count()) return;
         const TileMeta* t = &tile_meta_db()[10];
         int col = t->sprite_index % s_tiles_per_row;
         int row = t->sprite_index / s_tiles_per_row;
-        
-        // Рисуем составное изображение шипов 2x2 со смещением
+
         for (int dy = 0; dy < 2; dy++) {
             for (int dx = 0; dx < 2; dx++) {
                 float spriteX = destX + offsetX + (float)(dx * TILE_SIZE);
                 float spriteY = destY + offsetY + (float)(dy * TILE_SIZE);
-                
-                // Проверяем, видима ли эта часть в текущем тайле
+
                 if (spriteX < destX + TILE_SIZE && spriteX + TILE_SIZE > destX &&
                     spriteY < destY + TILE_SIZE && spriteY + TILE_SIZE > destY) {
-                    
+
                     int srcX = col * TILE_SIZE;
                     int srcY = row * TILE_SIZE;
                     sprite_rect_t r = png_create_sprite_rect(s_tileset, srcX, srcY, TILE_SIZE, TILE_SIZE);
-                    
-                    // Различные трансформации для каждого куска
+
                     png_transform_t xf = PNG_TRANSFORM_IDENTITY;
                     if (dx == 1 && dy == 0) xf = PNG_TRANSFORM_FLIP_X;
                     if (dx == 0 && dy == 1) xf = PNG_TRANSFORM_FLIP_Y;
                     if (dx == 1 && dy == 1) xf = PNG_TRANSFORM_ROT_180;
-                    
-                    png_draw_sprite_transform(s_tileset, &r, spriteX, spriteY, (float)TILE_SIZE, (float)TILE_SIZE, xf);
+
+                    png_draw_sprite_transform(s_tileset, &r, (int)spriteX, (int)spriteY, TILE_SIZE, TILE_SIZE, xf);
                 }
             }
         }
@@ -427,50 +379,36 @@ static void render_moving_spikes_tile(int tileX, int tileY, float destX, float d
 
 // REMOVED: render_dual_sprite_tile - was deprecated and unused
 
-// Рендер кольца-обруча (как в Java оригинале: add2HoopList)
-// Состояние текстур управляется централизованно через graphics.c
-static void render_hoop_tile(const TileMeta* t, float destX, float destY, int flags, int tileID) {
-    // Фон зависит от флага воды (как в Java оригинале)
+// Рендер кольца-обруча: фон тайла (plain pass)
+static void render_hoop_tile_plain(float destX, float destY, int flags) {
     u32 bg_color = (flags & TILE_FLAG_WATER) ? WATER_COLOUR : BACKGROUND_COLOUR;
-    
-    // Переключаемся на plain только если нужно
-    if (graphics_get_texturing_state() != 0) { // 0=plain, 1=textured
-        graphics_begin_plain();
-    }
     graphics_draw_rect(destX, destY, (float)TILE_SIZE, (float)TILE_SIZE, bg_color);
-    
-    // Переключение рендеринга по ID тайла (кольца ID 13-28)
-    if (tileID >= 13 && tileID <= 28 && is_sprite_valid(t->sprite_index)) {
-        if (graphics_get_texturing_state() != 1) {
-            graphics_begin_textured();
-        }
-        
-        // Рендер фоновой части кольца
-        int col = t->sprite_index % s_tiles_per_row;
-        int row = t->sprite_index / s_tiles_per_row;
-        int srcX = col * TILE_SIZE;
-        int srcY = row * TILE_SIZE;
-        
-        sprite_rect_t r = png_create_sprite_rect(s_tileset, srcX, srcY, TILE_SIZE, TILE_SIZE);
-        
-        // Захардкоженная трансформация фонового спрайта по ориентации (вместо t->ring_bg_transform)
-        TileTransform bg_transform = (t->orientation == ORIENT_VERT_TOP) ? TF_ROT_270_FLIP_X :
-                                    (t->orientation == ORIENT_VERT_BOTTOM) ? TF_ROT_270_FLIP_XY :
-                                    (t->orientation == ORIENT_HORIZ_LEFT) ? TF_FLIP_Y :
-                                    (t->orientation == ORIENT_HORIZ_RIGHT) ? TF_FLIP_XY : TF_NONE;
-        png_transform_t xf = map_tf_to_png(bg_transform);
-        
-        png_draw_sprite_transform(s_tileset, &r, destX, destY, (float)TILE_SIZE, (float)TILE_SIZE, xf);
-    }
-    
-    // Передняя часть кольца в очередь (как в Java: add2HoopList)
-    if (tileID >= 13 && tileID <= 28 && is_sprite_valid(t->sprite_index)) {
-        // Захардкоженная трансформация по ориентации (вместо t->ring_fg_transform)
-        TileTransform fg_transform = (t->orientation == ORIENT_VERT_TOP) ? TF_ROT_270 :
-                                    (t->orientation == ORIENT_VERT_BOTTOM) ? TF_ROT_270_FLIP_Y :
-                                    (t->orientation == ORIENT_HORIZ_RIGHT) ? TF_FLIP_X : TF_NONE;
-        hoop_fg_push(t->sprite_index, destX, destY, fg_transform);
-    }
+}
+
+// Рендер кольца-обруча: спрайты и очередь foreground (textured pass)
+static void render_hoop_tile_textured(const TileMeta* t, float destX, float destY, int tileID) {
+    if (!s_tileset || s_tiles_per_row <= 0) return;
+    if (tileID < 13 || tileID > 28 || !is_sprite_valid(t->sprite_index)) return;
+
+    int col = t->sprite_index % s_tiles_per_row;
+    int row = t->sprite_index / s_tiles_per_row;
+    int srcX = col * TILE_SIZE;
+    int srcY = row * TILE_SIZE;
+
+    sprite_rect_t r = png_create_sprite_rect(s_tileset, srcX, srcY, TILE_SIZE, TILE_SIZE);
+
+    TileTransform bg_transform = (t->orientation == ORIENT_VERT_TOP) ? TF_ROT_270_FLIP_X :
+                                (t->orientation == ORIENT_VERT_BOTTOM) ? TF_ROT_270_FLIP_XY :
+                                (t->orientation == ORIENT_HORIZ_LEFT) ? TF_FLIP_Y :
+                                (t->orientation == ORIENT_HORIZ_RIGHT) ? TF_FLIP_XY : TF_NONE;
+    png_transform_t xf = map_tf_to_png(bg_transform);
+
+    png_draw_sprite_transform(s_tileset, &r, (int)destX, (int)destY, TILE_SIZE, TILE_SIZE, xf);
+
+    TileTransform fg_transform = (t->orientation == ORIENT_VERT_TOP) ? TF_ROT_270 :
+                                (t->orientation == ORIENT_VERT_BOTTOM) ? TF_ROT_270_FLIP_Y :
+                                (t->orientation == ORIENT_HORIZ_RIGHT) ? TF_FLIP_X : TF_NONE;
+    hoop_fg_push(t->sprite_index, destX, destY, fg_transform);
 }
 
 // --- Рендер видимой области (ОБНОВЛЕНО) ---
@@ -491,120 +429,120 @@ void level_render_visible_area(int cameraX, int cameraY, int screenWidth, int sc
     if (endTileX >= g_level.width)   endTileX = g_level.width - 1;
     if (endTileY >= g_level.height)  endTileY = g_level.height - 1;
 
-    // Начинаем с текстур (большинство тайлов - спрайты)
-    // Состояние теперь централизовано в graphics.c
-    graphics_begin_textured();
+    // Pass 1: plain фон (минимизируем переключения режима)
+    graphics_begin_plain();
 
     for (int y = startTileY; y <= endTileY; ++y) {
         for (int x = startTileX; x <= endTileX; ++x) {
-            // Явно приводим к unsigned для сохранения флагов
             unsigned int tile = (unsigned short)g_level.tileMap[y][x];
-            
-            // Точная копия логики TileCanvas.java:369-383
             bool is_water = (tile & TILE_FLAG_WATER) ? true : false;
-            int original_tile_flags = tile & TILE_FLAGS_MASK; // Сохраняем оригинальные флаги ДО очистки
-            
+            int original_tile_flags = tile & TILE_FLAGS_MASK;
+
             if (is_water) {
-                tile = tile & ~TILE_FLAG_WATER; // Убираем флаг воды (Java:372)
+                tile = tile & ~TILE_FLAG_WATER;
             }
-            
+
             int tile_id = tile & TILE_ID_MASK;
-            int tile_flags = original_tile_flags; // Используем оригинальные флаги с водой
-            
-            
-            
+            int tile_flags = original_tile_flags;
+
             float screenX = (float)(x * TILE_SIZE - cameraX);
             float screenY = (float)(y * TILE_SIZE - cameraY);
-            
-            // Java switch(i): case 0 - fillRect
+
             if (tile_id == 0) {
-                // Переключаемся на plain только если нужно
-                if (graphics_get_texturing_state() != 0) {
-                    graphics_begin_plain();
-                }
-                // Используем канонические цвета из BounceConst.java
                 u32 bg_color = is_water ? WATER_COLOUR : BACKGROUND_COLOUR;
                 graphics_draw_rect(screenX, screenY, (float)TILE_SIZE, (float)TILE_SIZE, bg_color);
                 continue;
             }
-            
+
             if (tile_id < 0 || tile_id >= (int)tile_meta_count()) continue;
 
-            const TileMeta* t = &tile_meta_db()[tile_id];
-            
-            
-            // Остальные тайлы обрабатываются нормально
-
-            if (s_tileset && s_tiles_per_row > 0) {
-                // Подложить синий фон воды под все спрайты с флагом 0x40
-                if (is_water) {
-                    if (graphics_get_texturing_state() != 0) {
-                        graphics_begin_plain();
-                    }
-                    graphics_draw_rect(screenX, screenY, (float)TILE_SIZE, (float)TILE_SIZE, WATER_COLOUR); // фон воды
-                    // Подготовиться к спрайтам
-                    if (graphics_get_texturing_state() != 1) {
-                        graphics_begin_textured();
-                    }
-                }
-                
-                // Обработка специальных тайлов - сначала проверяем конкретные tile_id
-                // ВАЖНО: Фон воды уже отрисован выше, специальные тайлы рисуют только спрайт поверх
-                // (соответствует Java: case 9 рисует mExitTileImage без проверки фона)
-                if (tile_id == 9) {
-                    // EXIT - составной тайл (передаем мировые координаты и камеру)
-                    
-                    // Полоски теперь рисуются в render_exit_tile
-                    
-                    render_exit_tile(tile_id, screenX, screenY, x, y);
-                    continue;
-                } else if (tile_id == 10) {
-                    // MOVING_SPIKES - специальная обработка
-                    render_moving_spikes_tile(x, y, screenX, screenY);
-                    continue;
-                } else if (t->render_type & RENDER_COMPOSITE) {
-                    render_exit_tile(tile_id, screenX, screenY, x, y);
-                    continue;
-                } else if (t->render_type & RENDER_HOOP) {
-                    render_hoop_tile(t, screenX, screenY, tile_flags, tile_id);
-                    continue;
-                } else {
-                    
-                    // Обычный тайл
-                    int sprite_idx = t->sprite_index;
-                    
-                    if (is_sprite_valid(sprite_idx)) {
-                        // Обычные спрайты требуют текстур
-                        if (graphics_get_texturing_state() != 1) {
-                            graphics_begin_textured();
-                        }
-                        
-                        int col = sprite_idx % s_tiles_per_row;
-                        int row = sprite_idx / s_tiles_per_row;
-                        int srcX = col * TILE_SIZE;
-                        int srcY = row * TILE_SIZE;
-                        
-
-                        png_transform_t xf = map_tf_to_png(t->transform);
-
-                        
-                        sprite_rect_t r = png_create_sprite_rect(s_tileset, srcX, srcY, TILE_SIZE, TILE_SIZE);
-                        if (xf == PNG_TRANSFORM_IDENTITY) {
-                            png_draw_sprite(s_tileset, &r, screenX, screenY, (float)TILE_SIZE, (float)TILE_SIZE);
-                        } else {
-                            png_draw_sprite_transform(s_tileset, &r, screenX, screenY, (float)TILE_SIZE, (float)TILE_SIZE, xf);
-                        }
-                    } else {
-                        // Фоллбэк для недействительных индексов - явный переход в plain режим
-                        if (graphics_get_texturing_state() != 0) {
-                            graphics_begin_plain();
-                        }
-                        graphics_draw_rect(screenX, screenY, (float)TILE_SIZE, (float)TILE_SIZE, 0xFF444444);
-                    }
-                }
-            } else {
-                // Если атлас не загружен - серые квадраты
+            if (!s_tileset || s_tiles_per_row <= 0) {
                 graphics_draw_rect(screenX, screenY, (float)TILE_SIZE, (float)TILE_SIZE, 0xFF444444);
+                continue;
+            }
+
+            const TileMeta* t = &tile_meta_db()[tile_id];
+
+            if (tile_id == 9) {
+                if (is_water) {
+                    graphics_draw_rect(screenX, screenY, (float)TILE_SIZE, (float)TILE_SIZE, WATER_COLOUR);
+                }
+                render_exit_tile_plain(tile_id, screenX, screenY, x, y);
+                continue;
+            } else if (tile_id == 10) {
+                render_moving_spikes_tile_plain(x, y, screenX, screenY);
+                continue;
+            } else if (t->render_type & RENDER_COMPOSITE) {
+                if (is_water) {
+                    graphics_draw_rect(screenX, screenY, (float)TILE_SIZE, (float)TILE_SIZE, WATER_COLOUR);
+                }
+                render_exit_tile_plain(tile_id, screenX, screenY, x, y);
+                continue;
+            } else if (t->render_type & RENDER_HOOP) {
+                render_hoop_tile_plain(screenX, screenY, tile_flags);
+                continue;
+            }
+
+            if (is_water) {
+                graphics_draw_rect(screenX, screenY, (float)TILE_SIZE, (float)TILE_SIZE, WATER_COLOUR);
+            }
+
+            if (!is_sprite_valid(t->sprite_index)) {
+                graphics_draw_rect(screenX, screenY, (float)TILE_SIZE, (float)TILE_SIZE, 0xFF444444);
+            }
+        }
+    }
+
+    // Pass 2: текстуры (спрайты)
+    graphics_begin_textured();
+
+    for (int y = startTileY; y <= endTileY; ++y) {
+        for (int x = startTileX; x <= endTileX; ++x) {
+            unsigned int tile = (unsigned short)g_level.tileMap[y][x];
+            bool is_water = (tile & TILE_FLAG_WATER) ? true : false;
+
+            if (is_water) {
+                tile = tile & ~TILE_FLAG_WATER;
+            }
+
+            int tile_id = tile & TILE_ID_MASK;
+
+            if (tile_id == 0) continue;
+            if (tile_id < 0 || tile_id >= (int)tile_meta_count()) continue;
+            if (!s_tileset || s_tiles_per_row <= 0) continue;
+
+            const TileMeta* t = &tile_meta_db()[tile_id];
+
+            float screenX = (float)(x * TILE_SIZE - cameraX);
+            float screenY = (float)(y * TILE_SIZE - cameraY);
+
+            if (tile_id == 9) {
+                render_exit_tile_textured(tile_id, screenX, screenY, x, y);
+                continue;
+            } else if (tile_id == 10) {
+                render_moving_spikes_tile_textured(x, y, screenX, screenY);
+                continue;
+            } else if (t->render_type & RENDER_COMPOSITE) {
+                render_exit_tile_textured(tile_id, screenX, screenY, x, y);
+                continue;
+            } else if (t->render_type & RENDER_HOOP) {
+                render_hoop_tile_textured(t, screenX, screenY, tile_id);
+                continue;
+            }
+
+            if (is_sprite_valid(t->sprite_index)) {
+                int col = t->sprite_index % s_tiles_per_row;
+                int row = t->sprite_index / s_tiles_per_row;
+                int srcX = col * TILE_SIZE;
+                int srcY = row * TILE_SIZE;
+
+                png_transform_t xf = map_tf_to_png(t->transform);
+                sprite_rect_t r = png_create_sprite_rect(s_tileset, srcX, srcY, TILE_SIZE, TILE_SIZE);
+                if (xf == PNG_TRANSFORM_IDENTITY) {
+                    png_draw_sprite(s_tileset, &r, (int)screenX, (int)screenY, TILE_SIZE, TILE_SIZE);
+                } else {
+                    png_draw_sprite_transform(s_tileset, &r, (int)screenX, (int)screenY, TILE_SIZE, TILE_SIZE, xf);
+                }
             }
         }
     }

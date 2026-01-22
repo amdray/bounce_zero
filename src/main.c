@@ -14,9 +14,8 @@ PSP_MAIN_THREAD_ATTR(PSP_THREAD_ATTR_USER);
 // Макрос для подавления предупреждений о неиспользуемых параметрах
 #define UNUSED(x) ((void)(x))
 
-// Делитель частоты обновления физики (60 FPS -> 30 FPS)
-// Инпут буферизуется промежуточно, эффекты применяются на каждом втором кадре
-#define PHYSICS_TICK_DIVIDER 2
+// Фиксированный тик физики в миллисекундах (как в Java: 30 мс ≈ 33.3 Гц)
+#define PHYSICS_DT_MS 30
 
 
 // Параметры потока колбэков (из образца PSPSDK)
@@ -24,32 +23,11 @@ PSP_MAIN_THREAD_ATTR(PSP_THREAD_ATTR_USER);
 #define CALLBACK_STACK 0xFA0
 
 /**
- * Open file with fallback paths
- * Tries different path prefixes to find the file
+ * Open file using current working directory.
  */
 FILE* util_open_file(const char* path, const char* mode) {
     if (!path || !mode) return NULL;
-
-    const char* prefixes[] = { "", "ms0:/", "./" };
-    char full_path[512];
-
-    for (int i = 0; i < 3; i++) {
-        snprintf(full_path, sizeof(full_path), "%s%s", prefixes[i], path);
-        FILE* file = fopen(full_path, mode);
-        if (file) return file;
-    }
-
-    // Additional fallback: try with/without leading slash
-    if (path[0] == '/') {
-        FILE* file = fopen(path + 1, mode);
-        if (file) return file;
-    } else {
-        snprintf(full_path, sizeof(full_path), "/%s", path);
-        FILE* file = fopen(full_path, mode);
-        if (file) return file;
-    }
-
-    return NULL;
+    return fopen(path, mode);
 }
 
 /**
@@ -80,30 +58,45 @@ int main_setup_callbacks(void) {
 }
 
 int main(void) {
-    int callback_thid = main_setup_callbacks();
+    main_setup_callbacks();
     
     graphics_init();
     input_init();
-    sound_init();
+    if (sound_init() < 0) {
+        graphics_shutdown();
+        sceKernelExitGame();
+        return 0;
+    }
     save_init();      // Загрузить сохранённые рекорды
     game_init();
     
-    // Счётчик для замедления физики до оригинальной частоты
-    int physics_tick_counter = 0;
-    // Универсальные буферы для input'ов между тиками физики  
+    // Тайминг для фиксированного тика физики (30 мс как в Java TileCanvas.GameTimer)
+    unsigned long long prev_time_ms = sceKernelGetSystemTimeWide() / 1000ULL;
+    int physics_time_acc_ms = 0;
+    GameState prev_state = g_game.state;
     
     while(g_game.state != STATE_EXIT) {
         input_update();
-        
-        // === ОБНОВЛЕНИЕ МЕНЮ И ИНТЕРФЕЙСА (каждый кадр) ===
-        if(g_game.state == STATE_SPLASH_NOKIA || g_game.state == STATE_SPLASH || g_game.state == STATE_MENU || g_game.state == STATE_LEVEL_SELECT || g_game.state == STATE_HIGH_SCORE || g_game.state == STATE_INSTRUCTIONS || g_game.state == STATE_GAME_OVER || g_game.state == STATE_LEVEL_COMPLETE) {
-            game_update();  // Все UI состояния обновляются на полной частоте 60 FPS для отзывчивости
+
+        const game_state_handler_t* handler = game_get_state_handler(g_game.state);
+        if (!handler) break;
+        if (g_game.state != prev_state) {
+            if (g_game.state == STATE_MENU && prev_state != STATE_MENU) {
+                save_flush();
+            }
+            input_reset_edges();
+            prev_state = g_game.state;
         }
-        
-        // === ОБНОВЛЕНИЕ ИГРОВОЙ ФИЗИКИ (замедленно) ===
-        else if(g_game.state == STATE_GAME) {
-            // ВАЖНО: Кнопки меню обрабатываются на полной частоте 60 FPS
-            // (не в game_update который вызывается через PHYSICS_TICK_DIVIDER = 30 FPS)  
+
+        // === ОБНОВЛЕНИЕ МЕНЮ И ИНТЕРФЕЙСА (каждый кадр) ===
+        if (handler->tick_mode == GAME_TICK_VARIABLE) {
+            game_state_update();  // Все UI состояния обновляются на полной частоте 60 FPS для отзывчивости
+        }
+
+        // === ОБНОВЛЕНИЕ ИГРОВОЙ ФИЗИКИ (фиксированный тик 30 мс) ===
+        else if (handler->tick_mode == GAME_TICK_FIXED) {
+            // ВАЖНО: Кнопки меню обрабатываются на полной частоте рендера,
+            // физика вызывается отдельным фиксированным тиком (30 мс),
             // чтобы избежать пропусков нажатий
             if(input_pressed(PSP_CTRL_START)) {
                 // Сохраняем состояние игры для Continue
@@ -111,29 +104,31 @@ int main(void) {
                 g_game.state = STATE_MENU;
             }
 
-            // Чистые буферы input'ов - main.c не знает о игровой логике
-            if(input_pressed(PSP_CTRL_CROSS)) {
-                g_game.buffered_jump = 1;
-            }
-            if(input_released(PSP_CTRL_CROSS)) {
-                g_game.buffered_jump_released = 1;
-            }
-            
-            // Обновляем физику только каждый N-й кадр для оптимизации
-            physics_tick_counter++;
-            if(physics_tick_counter >= PHYSICS_TICK_DIVIDER) {
-                game_update();
+            // Аккумулятор времени для вызова game_update() ровно раз в 30 мс
+            unsigned long long now_ms = sceKernelGetSystemTimeWide() / 1000ULL;
+            int delta_ms = (int)(now_ms - prev_time_ms);
+            prev_time_ms = now_ms;
 
-                // Сбрасываем все буферы после обработки
-                g_game.buffered_jump = 0;
-                g_game.buffered_jump_released = 0;
-                physics_tick_counter = 0;
+            // Предотвращаем огромные скачки (например, при паузе)
+            if (delta_ms > 200) delta_ms = 200;
+
+            physics_time_acc_ms += delta_ms;
+
+            while (physics_time_acc_ms >= PHYSICS_DT_MS) {
+                game_state_update();
+
+                physics_time_acc_ms -= PHYSICS_DT_MS;
+
+                handler = game_get_state_handler(g_game.state);
+                if (!handler || handler->tick_mode != GAME_TICK_FIXED) {
+                    break;
+                }
             }
         }
         
         // Рендеринг всегда на полной частоте для плавности
         graphics_start_frame();
-        game_render();
+        game_state_render();
         graphics_end_frame();
         
     }
@@ -142,11 +137,6 @@ int main(void) {
     save_shutdown();   // Сохранить рекорды перед выходом
     sound_shutdown();
     graphics_shutdown();
-    
-    // Явно завершить callback thread перед выходом (PSPSDK best practices)
-    if (callback_thid >= 0) {
-        sceKernelTerminateDeleteThread(callback_thid);
-    }
     
     sceKernelExitGame();
     return 0;

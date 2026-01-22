@@ -82,16 +82,16 @@ static const TileMeta TILE_DB[55] = {
     /* case 33 - Рампа пол: ◢ (поворот на 270°) Java: bool ? tileImages[62] : tileImages[58] = manipulateImage(базовый, 5) = ROT_270 */
     { ORIENT_BL, 0, 0, TF_ROT_270, RENDER_NORMAL},
 
-    /* case 34 - Рампа потолок: ◣ (поворот на 180°) Java: tileImages[65] = manipulateImage(базовый, 4) = ROT_180 */
+    /* case 34 - Резиновая рампа: ◣ (поворот на 180°) Java: tileImages[65] = manipulateImage(базовый, 4) = ROT_180 */
     { ORIENT_TL, 0, 8, TF_ROT_180, RENDER_NORMAL},
 
-    /* case 35 - Рампа потолок: ◤ (поворот на 90°) Java: tileImages[64] = manipulateImage(базовый, 3) = ROT_90 */
+    /* case 35 - Резиновая рампа: ◤ (поворот на 90°) Java: tileImages[64] = manipulateImage(базовый, 3) = ROT_90 */
     { ORIENT_TR, 0, 8, TF_ROT_90, RENDER_NORMAL},
 
-    /* case 36 - Рампа потолок: ◥ (базовый спрайт) Java: tileImages[63] = extractImage(image, 0, 2) */
+    /* case 36 - Резиновая рампа: ◥ (базовый спрайт) Java: tileImages[63] = extractImage(image, 0, 2) */
     { ORIENT_BR, 0, 8, TF_NONE, RENDER_NORMAL},
 
-    /* case 37 - Рампа потолок:  ◢ (поворот на 270°) Java: tileImages[66] = manipulateImage(базовый, 5) = ROT_270 */
+    /* case 37 - Резиновая рампа:  ◢ (поворот на 270°) Java: tileImages[66] = manipulateImage(базовый, 5) = ROT_270 */
     { ORIENT_BL, 0, 8, TF_ROT_270, RENDER_NORMAL},
 
     /* 38 - ID_SPEED = 38 - бонус скорости */
@@ -130,6 +130,5 @@ const TileMeta* tile_meta_db(void) {
 uint32_t tile_meta_count(void) {
     return 55;
 }
-
 
 
