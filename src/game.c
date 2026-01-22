@@ -154,12 +154,12 @@ void game_start_level(int level_number, game_start_mode_t mode) {
         g_game.numRings = 0;
     }
 
+    // Дверь всегда должна начинать уровень закрытой
+    game_exit_reset();
+
     if (mode == GAME_START_FRESH) {
-        game_exit_reset();
         g_game.saved_game_state = SAVED_GAME_IN_PROGRESS;
         g_game.new_best_score = false;
-    } else if (mode == GAME_START_SELECTED) {
-        game_exit_reset();
     }
 
     player_init(&g_game.player, g_level.startPosX, g_level.startPosY,
