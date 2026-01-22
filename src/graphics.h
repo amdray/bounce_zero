@@ -9,6 +9,10 @@
 #define VRAM_BUFFER_WIDTH  512
 #define VRAM_BUFFER_HEIGHT 272
 
+#define FONT9_SPACING 0
+#define FONT12_SPACING 0
+#define FONT23_SPACING 0
+
 #ifdef __cplusplus
 extern "C" {
 #endif

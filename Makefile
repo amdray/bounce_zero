@@ -1,5 +1,5 @@
 TARGET = Bounce
-OBJS = src/main.o src/graphics.o src/input.o src/game.o src/physics.o src/level.o src/png.o src/font_atlas.o src/font9_atlas.o src/font12_atlas.o src/font23_atlas.o src/font9.o src/font12.o src/font23.o src/font24.o src/menu.o src/tile_table.o src/sound.o src/save.o src/local.o src/local_extra.o src/splash.o
+OBJS = src/main.o src/graphics.o src/input.o src/game.o src/physics.o src/level.o src/png.o src/font_atlas.o src/font9_atlas.o src/font12_atlas.o src/font23_atlas.o src/font24.o src/menu.o src/tile_table.o src/sound.o src/save.o src/local.o src/local_extra.o src/splash.o
 
 INCDIR = src/
 CFLAGS = -O2 -G0 -Wall -Wextra -Wshadow -Wfloat-conversion -Werror=implicit-function-declaration -std=c99 -MMD -MP -Isrc

@@ -1,9 +1,6 @@
 #include "graphics.h"
-#include "font9.h"
-#include "font12.h"
-#include "font23.h"
-#include "font24.h"
 #include "font_atlas.h"
+#include "font24.h"
 #include "types.h"  // Для SCREEN_WIDTH/SCREEN_HEIGHT
 #include "png.h"    // Для texture_t
 #include <pspgu.h>
