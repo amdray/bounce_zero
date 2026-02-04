@@ -7,6 +7,7 @@
 #include <pspge.h>     // Для sceGeEdramGetAddr/GetSize
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <malloc.h>
 
@@ -23,8 +24,8 @@
 static unsigned int staticVramOffset = (VRAM_BUFFER_WIDTH * VRAM_BUFFER_HEIGHT * FRAMEBUFFER_BPP) * 2;
 
 
-// Helper функция для ограничения значения границами
-static inline float clamp_bounds(float value, float min, float max) {
+// Helper функция для ограничения значения границами (int)
+static inline int clamp_bounds_i(int value, int min, int max) {
     if (value < min) return min;
     if (value > max) return max;
     return value;
@@ -91,8 +92,8 @@ typedef struct {
 
 // Структура вершины для текстурированных примитивов
 typedef struct {
-    float u, v;
-    float x, y, z;
+    uint16_t u, v;
+    short x, y, z;
 } TextureVertex;
 
 // Функция чтения для stb_image
@@ -254,36 +255,30 @@ cleanup:
 // Загрузка PNG в VRAM
 
 sprite_rect_t png_create_sprite_rect(texture_t* tex, int x, int y, int w, int h) {
+    (void)tex;
     sprite_rect_t rect;
-    if (!tex || tex->width == 0 || tex->height == 0) {
-        rect.u = 0.0f;
-        rect.v = 0.0f;
-        rect.width = 1.0f;
-        rect.height = 1.0f;
-        return rect;
-    }
-    
-    rect.u = (float)x / (float)tex->width;
-    rect.v = (float)y / (float)tex->height;
-    rect.width  = (float)w / (float)tex->width;
-    rect.height = (float)h / (float)tex->height;
+    rect.x = x;
+    rect.y = y;
+    rect.w = w;
+    rect.h = h;
     return rect;
 }
 
 void png_draw_sprite(texture_t* tex, sprite_rect_t* sprite, int x, int y, int w, int h) {
     if (!tex || !sprite || !tex->data) return;
     if (tex->width <= 0 || tex->height <= 0) return;
+    if (sprite->w <= 0 || sprite->h <= 0) return;
     if (w <= 0 || h <= 0) return;
     
-    // Вычисляем UV координаты в пикселях (как раньше)
-    float u1 = sprite->u * (float)tex->width;
-    float v1 = sprite->v * (float)tex->height;
-    float u2 = (sprite->u + sprite->width) * (float)tex->width;
-    float v2 = (sprite->v + sprite->height) * (float)tex->height;
+    // Atlas pixel rect -> texture pixel UV
+    const int u1 = sprite->x;
+    const int v1 = sprite->y;
+    const int u2 = sprite->x + sprite->w;
+    const int v2 = sprite->y + sprite->h;
     
     // Используем исправленную batch систему (с копированием в GE память)
     graphics_bind_texture(tex);  // Автоматически flush'нет если текстура изменилась
-    graphics_batch_sprite(u1, v1, u2, v2, (float)x, (float)y, (float)w, (float)h);  // Добавляем в batch
+    graphics_batch_sprite(u1, v1, u2, v2, x, y, w, h);  // Добавляем в batch
 }
 
 void png_free_texture(texture_t* tex) {
@@ -298,10 +293,10 @@ void png_free_texture(texture_t* tex) {
 }
 
 void png_draw_sprite_uv4(texture_t* tex,
-                         float u_tl, float v_tl,
-                         float u_tr, float v_tr,
-                         float u_bl, float v_bl,
-                         float u_br, float v_br,
+                         int u_tl, int v_tl,
+                         int u_tr, int v_tr,
+                         int u_bl, int v_bl,
+                         int u_br, int v_br,
                          int x, int y, int w, int h)
 {
     if (!tex || !tex->data) return;
@@ -311,30 +306,30 @@ void png_draw_sprite_uv4(texture_t* tex,
     if (!v) return;
 
     // Clamp to texture bounds
-    float tw = (float)tex->width, th = (float)tex->height;
-    
-    u_tl = clamp_bounds(u_tl, 0.0f, tw);
-    v_tl = clamp_bounds(v_tl, 0.0f, th);
-    u_tr = clamp_bounds(u_tr, 0.0f, tw);
-    v_tr = clamp_bounds(v_tr, 0.0f, th);
-    u_bl = clamp_bounds(u_bl, 0.0f, tw);
-    v_bl = clamp_bounds(v_bl, 0.0f, th);
-    u_br = clamp_bounds(u_br, 0.0f, tw);
-    v_br = clamp_bounds(v_br, 0.0f, th);
+    const int tw = tex->width;
+    const int th = tex->height;
+    u_tl = clamp_bounds_i(u_tl, 0, tw);
+    v_tl = clamp_bounds_i(v_tl, 0, th);
+    u_tr = clamp_bounds_i(u_tr, 0, tw);
+    v_tr = clamp_bounds_i(v_tr, 0, th);
+    u_bl = clamp_bounds_i(u_bl, 0, tw);
+    v_bl = clamp_bounds_i(v_bl, 0, th);
+    u_br = clamp_bounds_i(u_br, 0, tw);
+    v_br = clamp_bounds_i(v_br, 0, th);
 
 
     // Top-left
-    v[0].u = u_tl; v[0].v = v_tl;
-    v[0].x = (float)x;    v[0].y = (float)y;    v[0].z = 0.0f;
+    v[0].u = (uint16_t)u_tl; v[0].v = (uint16_t)v_tl;
+    v[0].x = (short)x;    v[0].y = (short)y;    v[0].z = 0;
     // Top-right
-    v[1].u = u_tr; v[1].v = v_tr;
-    v[1].x = (float)(x + w); v[1].y = (float)y;   v[1].z = 0.0f;
+    v[1].u = (uint16_t)u_tr; v[1].v = (uint16_t)v_tr;
+    v[1].x = (short)(x + w); v[1].y = (short)y;   v[1].z = 0;
     // Bottom-left
-    v[2].u = u_bl; v[2].v = v_bl;
-    v[2].x = (float)x;    v[2].y = (float)(y + h); v[2].z = 0.0f;
+    v[2].u = (uint16_t)u_bl; v[2].v = (uint16_t)v_bl;
+    v[2].x = (short)x;    v[2].y = (short)(y + h); v[2].z = 0;
     // Bottom-right
-    v[3].u = u_br; v[3].v = v_br;
-    v[3].x = (float)(x + w); v[3].y = (float)(y + h); v[3].z = 0.0f;
+    v[3].u = (uint16_t)u_br; v[3].v = (uint16_t)v_br;
+    v[3].x = (short)(x + w); v[3].y = (short)(y + h); v[3].z = 0;
 
     // Синхронизация с batch системой
     graphics_flush_batch();
@@ -343,7 +338,7 @@ void png_draw_sprite_uv4(texture_t* tex,
 
     // Draw as triangle strip: TL, TR, BL, BR
     sceGuDrawArray(GU_TRIANGLE_STRIP,
-                   GU_TEXTURE_32BITF|GU_VERTEX_32BITF|GU_TRANSFORM_2D,
+                   GU_TEXTURE_16BIT|GU_VERTEX_16BIT|GU_TRANSFORM_2D,
                    4, 0, v);
 }
 
@@ -352,16 +347,17 @@ void png_draw_sprite_transform(texture_t* tex, sprite_rect_t* sprite,
                            png_transform_t transform)
 {
     if (!tex || !sprite) return;
+    if (sprite->w <= 0 || sprite->h <= 0) return;
 
     // Базовые границы UV в пикселях
-    const float u1 = sprite->u * (float)tex->width;
-    const float v1 = sprite->v * (float)tex->height;
-    const float u2 = (sprite->u + sprite->width)  * (float)tex->width;
-    const float v2 = (sprite->v + sprite->height) * (float)tex->height;
+    const int u1 = sprite->x;
+    const int v1 = sprite->y;
+    const int u2 = sprite->x + sprite->w;
+    const int v2 = sprite->y + sprite->h;
 
     // Исходные углы (TL, TR, BL, BR)
-    float U[4] = { u1, u2, u1, u2 };
-    float V[4] = { v1, v1, v2, v2 };
+    int U[4] = { u1, u2, u1, u2 };
+    int V[4] = { v1, v1, v2, v2 };
 
     // Раскладываем enum в (rot, fx, fy)
     int rot = 0, fx = 0, fy = 0; // rot: 0,1,2,3 (по часовой)
@@ -402,10 +398,10 @@ void png_draw_sprite_transform(texture_t* tex, sprite_rect_t* sprite,
     }
 
     // Собираем конечные UV
-    const float tl_u = U[idx[0]], tl_v = V[idx[0]];
-    const float tr_u = U[idx[1]], tr_v = V[idx[1]];
-    const float bl_u = U[idx[2]], bl_v = V[idx[2]];
-    const float br_u = U[idx[3]], br_v = V[idx[3]];
+    const int tl_u = U[idx[0]], tl_v = V[idx[0]];
+    const int tr_u = U[idx[1]], tr_v = V[idx[1]];
+    const int bl_u = U[idx[2]], bl_v = V[idx[2]];
+    const int br_u = U[idx[3]], br_v = V[idx[3]];
 
     png_draw_sprite_uv4(tex, tl_u, tl_v, tr_u, tr_v, bl_u, bl_v, br_u, br_v,
                         x, y, w, h);

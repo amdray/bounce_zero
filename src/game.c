@@ -41,10 +41,10 @@ static void draw_bonus_bar(int x, int y, int bonus_value) {
     const int bar_height = 8;
     
     // Рисуем белую рамку (контур толщиной 1 пиксель)
-    graphics_draw_rect((float)x, (float)y, (float)frame_width, 1.0f, COLOR_BONUS_FRAME);                    // Верх
-    graphics_draw_rect((float)x, (float)(y + frame_height - 1), (float)frame_width, 1.0f, COLOR_BONUS_FRAME); // Низ
-    graphics_draw_rect((float)x, (float)y, 1.0f, (float)frame_height, COLOR_BONUS_FRAME);                   // Лево
-    graphics_draw_rect((float)(x + frame_width - 1), (float)y, 1.0f, (float)frame_height, COLOR_BONUS_FRAME);  // Право
+    graphics_draw_rect(x, y, frame_width, 1, COLOR_BONUS_FRAME);                    // Верх
+    graphics_draw_rect(x, y + frame_height - 1, frame_width, 1, COLOR_BONUS_FRAME); // Низ
+    graphics_draw_rect(x, y, 1, frame_height, COLOR_BONUS_FRAME);                   // Лево
+    graphics_draw_rect(x + frame_width - 1, y, 1, frame_height, COLOR_BONUS_FRAME);  // Право
     
     if (bonus_value > 0) {
         // Вычисляем ширину полоски (уменьшается слева направо)
@@ -52,14 +52,14 @@ static void draw_bonus_bar(int x, int y, int bonus_value) {
         
         if (current_bar_width > 0) {
             // Оранжевая полоска с отступом 1px со всех сторон (внутри рамки)
-            graphics_draw_rect((float)(x + 1), (float)(y + 1), (float)current_bar_width, (float)bar_height, COLOR_BONUS_BAR);
+            graphics_draw_rect(x + 1, y + 1, current_bar_width, bar_height, COLOR_BONUS_BAR);
         }
     }
 }
 
 // Camera - система отслеживания игрока с мертвой зоной
 #define CAMERA_UNINITIALIZED -999
-#define CAMERA_DEADZONE_RATIO 0.30f   // 30% от игровой области - зона без движения камеры
+#define CAMERA_DEADZONE_PERCENT 30   // 30% от игровой области - зона без движения камеры
 // Статическая переменная для вертикальной камеры с мертвой зоной
 static int s_currentCameraY = CAMERA_UNINITIALIZED;
 
@@ -284,7 +284,7 @@ static void render_game(void) {
 
     // Размеры мертвой зоны (только для игровой области)
     int gameAreaHeight = SCREEN_HEIGHT - HUD_HEIGHT;
-    int deadZoneTop = (int)(gameAreaHeight * CAMERA_DEADZONE_RATIO);
+    int deadZoneTop = (gameAreaHeight * CAMERA_DEADZONE_PERCENT) / 100;
     int deadZoneBottom = gameAreaHeight - deadZoneTop;
 
     // Мертвая зона работает только для больших уровней
@@ -409,10 +409,10 @@ static void render_game(void) {
     int hud_blue_y = separator_y + 1;
 
     // Белый разделитель (1 пиксель)
-    graphics_draw_rect(0.0f, (float)separator_y, (float)SCREEN_WIDTH, 1.0f, COLOR_WHITE_ABGR);
+    graphics_draw_rect(0, separator_y, SCREEN_WIDTH, 1, COLOR_WHITE_ABGR);
 
     // Синяя полоса (16 пикселей: 2+12+2)
-    graphics_draw_rect(0.0f, (float)hud_blue_y, (float)SCREEN_WIDTH, 16.0f, HUD_COLOUR);
+    graphics_draw_rect(0, hud_blue_y, SCREEN_WIDTH, 16, HUD_COLOUR);
 
     // Полоска бонуса (БЕЗ текстур - примитивы)
     // Вычисляем максимальный счетчик бонуса (как bonusCntrValue в Java)
@@ -467,13 +467,13 @@ static void render_game(void) {
     int score_width = graphics_measure_text(score_buffer, 9);
     int score_x = (SCREEN_WIDTH - score_width) / 2;
     int score_y = hudStartY + 5;  // Поднял на 1 пиксель
-    graphics_draw_text((float)score_x, (float)score_y, score_buffer, COLOR_WHITE_ABGR, 9);
+    graphics_draw_text(score_x, score_y, score_buffer, COLOR_WHITE_ABGR, 9);
 
     // Полоска бонуса - справа от счета для симметрии
     {
         int text_width = graphics_measure_text(score_buffer, 9);
         int bonus_x = score_x + text_width + 10 + 30; // После счета с отступом 10px, сдвиг на 30px вправо
-        int bonus_y = hudStartY + 4;  // На 1 пиксель ниже (было 3.0f)
+        int bonus_y = hudStartY + 4;  // На 1 пиксель ниже
         draw_bonus_bar(bonus_x, bonus_y, max_bonus);
     }
 }

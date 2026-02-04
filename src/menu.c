@@ -197,14 +197,14 @@ static ModalPanel draw_modal_panel(u32 background_color, u32 panel_color, const 
     panel.y = (SCREEN_HEIGHT - panel.h) / 2;
     panel.center_x = SCREEN_WIDTH / 2;
 
-    graphics_draw_rect(0.0f, 0.0f, (float)SCREEN_WIDTH, (float)SCREEN_HEIGHT, background_color);
-    graphics_draw_rect((float)panel.x, (float)panel.y, (float)panel.w, (float)panel.h, panel_color);
+    graphics_draw_rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, background_color);
+    graphics_draw_rect(panel.x, panel.y, panel.w, panel.h, panel_color);
 
     if (title) {
         int text_y = panel.y + 5;
         int w = graphics_measure_text(title, title_font);
         int x = panel.center_x - (w / 2);
-        graphics_draw_text((float)x, (float)text_y, title, title_color, title_font);
+        graphics_draw_text(x, text_y, title, title_color, title_font);
     }
 
     return panel;
@@ -286,7 +286,7 @@ void menu_render(void) {
         const char* title = local_get_text(QTJ_BOUN_GAME_NAME); // ID 10, как в оригинале BounceUI.java:65
         int w = graphics_measure_text(title, font_height);
         int x = center_x - (w / 2);
-        graphics_draw_text((float)x, (float)title_y, title, COLOR_SELECTION_BG, font_height);
+        graphics_draw_text(x, title_y, title, COLOR_SELECTION_BG, font_height);
     }
     
     // Данные пунктов меню (5 пунктов с равномерным расстоянием 25px)
@@ -312,12 +312,12 @@ void menu_render(void) {
         if (selected) {
             const int padding_x = (int)MAIN_MENU_PADDING_X;
             const int padding_y = (int)MAIN_MENU_PADDING_Y;
-            graphics_draw_rect((float)(x - padding_x), (float)(y - padding_y),
-                               (float)(w + 2 * padding_x), (float)bg_height, COLOR_SELECTION_BG);
+            graphics_draw_rect(x - padding_x, y - padding_y,
+                               w + 2 * padding_x, bg_height, COLOR_SELECTION_BG);
         }
 
         // Текст пункта
-        graphics_draw_text((float)x, (float)y, label, color, font_height);
+        graphics_draw_text(x, y, label, color, font_height);
     }
 
     // Будущие иконки меню
@@ -342,7 +342,7 @@ void instructions_render(void) {
         int line_count = s_instruction_line_counts[current_instruction_page];
         for (int i = 0; i < line_count; ++i) {
             int line_y = text_y + i * line_height;
-            graphics_draw_text((float)(panel.x + 20), (float)line_y,
+            graphics_draw_text(panel.x + 20, line_y,
                                s_instruction_lines[current_instruction_page][i],
                                COLOR_TEXT_NORMAL, 12);
         }
@@ -353,7 +353,7 @@ void instructions_render(void) {
     char page_info[64];
     snprintf(page_info, sizeof(page_info), "Часть %d из %d", current_instruction_page + 1, INSTRUCTIONS_TOTAL_PAGES);
     int page_w = graphics_measure_text(page_info, 9);
-    graphics_draw_text((float)(panel.center_x - (page_w / 2)), (float)text_y, page_info, COLOR_TEXT_NORMAL, 9);
+    graphics_draw_text(panel.center_x - (page_w / 2), text_y, page_info, COLOR_TEXT_NORMAL, 9);
 }
 
 void level_select_update(void) {
@@ -428,7 +428,7 @@ void level_select_render(void) {
         const char* title = local_text_select_level();
         int w = graphics_measure_text(title, 23);
         int x = center_x - (w / 2);
-        graphics_draw_text((float)x, (float)LEVEL_SELECT_TITLE_Y, title, COLOR_TEXT_NORMAL, 23);
+        graphics_draw_text(x, LEVEL_SELECT_TITLE_Y, title, COLOR_TEXT_NORMAL, 23);
     }
     
     // Размеры для сетки уровней
@@ -457,7 +457,7 @@ void level_select_render(void) {
 
             // Цветной фон для выбранного уровня (красный как в "Bounce")
             if(level == g_game.selected_level) {
-                graphics_draw_rect((float)(x - 5), (float)(y - 5), (float)cell_width, (float)cell_height, COLOR_SELECTION_BG);
+                graphics_draw_rect(x - 5, y - 5, cell_width, cell_height, COLOR_SELECTION_BG);
             }
 
             // Номер уровня
@@ -465,7 +465,7 @@ void level_select_render(void) {
             snprintf(level_text, sizeof(level_text), "%d", level);
 
             u32 color = (level == g_game.selected_level) ? COLOR_TEXT_SELECTED : COLOR_TEXT_NORMAL;
-            graphics_draw_text((float)x, (float)y, level_text, color, 23);
+            graphics_draw_text(x, y, level_text, color, 23);
         }
     }
 }
@@ -499,7 +499,7 @@ void high_score_render(void) {
     // Лучший счёт (красный, шрифт 24)
     {
         int w = graphics_measure_number(save->best_score);
-        graphics_draw_number((float)(panel.center_x - (w / 2)), (float)text_y, save->best_score, COLOR_SELECTION_BG);
+        graphics_draw_number(panel.center_x - (w / 2), text_y, save->best_score, COLOR_SELECTION_BG);
     }
 
     // Кнопка "X - Continue/Return" - фиксированная позиция внизу панели
@@ -517,11 +517,11 @@ void high_score_render(void) {
             const char* icon = "(X)";
             int icon_w = graphics_measure_text(icon, 9);
             int icon_x = start_x + (12 - icon_w) / 2;
-            graphics_draw_text((float)icon_x, (float)text_y, icon, COLOR_TEXT_NORMAL, 9);
+            graphics_draw_text(icon_x, text_y, icon, COLOR_TEXT_NORMAL, 9);
         }
 
         // Текст кнопки
-        graphics_draw_text((float)(start_x + 12 + 4), (float)text_y, continue_text, COLOR_TEXT_NORMAL, 9);
+        graphics_draw_text(start_x + 12 + 4, text_y, continue_text, COLOR_TEXT_NORMAL, 9);
     }
 
 }
@@ -546,7 +546,7 @@ void game_over_render(void) {
     if (g_game.new_best_score) {
         const char* new_record = local_get_text(QTJ_BOUN_NEW_HIGH_SCORE);
         int w = graphics_measure_text(new_record, 9);
-        graphics_draw_text((float)(panel.center_x - (w / 2)), (float)text_y, new_record, COLOR_SELECTION_BG, 9);
+        graphics_draw_text(panel.center_x - (w / 2), text_y, new_record, COLOR_SELECTION_BG, 9);
     }
     text_y += 9 + 20;  // Пропуск для симметричности (высота строки + отступ)
 
@@ -556,7 +556,7 @@ void game_over_render(void) {
     // Только число счёта, без "Score:" - красный, шрифт 24 (BounceUI.java:136)
     {
         int w = graphics_measure_number(g_game.score);
-        graphics_draw_number((float)(panel.center_x - (w / 2)), (float)text_y, g_game.score, COLOR_SELECTION_BG);
+        graphics_draw_number(panel.center_x - (w / 2), text_y, g_game.score, COLOR_SELECTION_BG);
     }
 
     // Кнопка "X - OK" - фиксированная позиция внизу панели (Local.getText(19), BounceUI.java:125)
@@ -574,11 +574,11 @@ void game_over_render(void) {
             const char* icon = "(X)";
             int icon_w = graphics_measure_text(icon, 9);
             int icon_x = start_x + (12 - icon_w) / 2;
-            graphics_draw_text((float)icon_x, (float)text_y, icon, COLOR_TEXT_NORMAL, 9);
+            graphics_draw_text(icon_x, text_y, icon, COLOR_TEXT_NORMAL, 9);
         }
 
         // Текст кнопки
-        graphics_draw_text((float)(start_x + 12 + 4), (float)text_y, ok_text, COLOR_TEXT_NORMAL, 9);
+        graphics_draw_text(start_x + 12 + 4, text_y, ok_text, COLOR_TEXT_NORMAL, 9);
     }
 }
 
@@ -620,14 +620,14 @@ void level_complete_render(void) {
         const char* params[] = { level_str };
         const char* level_title = local_get_text_with_params(QTJ_BOUN_LEVEL_COMPLETED, params, 1);
         int w = graphics_measure_text(level_title, 9);
-        graphics_draw_text((float)(panel.center_x - (w / 2)), (float)text_y, level_title, COLOR_TEXT_NORMAL, 9);
+        graphics_draw_text(panel.center_x - (w / 2), text_y, level_title, COLOR_TEXT_NORMAL, 9);
     }
 
     // Счёт - красный, шрифт 24, фиксированная позиция (как в high_score) (BounceUI.java:152)
     text_y = panel.y + 60;  // Фиксированная позиция (одинаковая в high_score и level_complete)
     {
         int w = graphics_measure_number(g_game.score);
-        graphics_draw_number((float)(panel.center_x - (w / 2)), (float)text_y, g_game.score, COLOR_SELECTION_BG);
+        graphics_draw_number(panel.center_x - (w / 2), text_y, g_game.score, COLOR_SELECTION_BG);
     }
 
     // Кнопка "X - Continue" - фиксированная позиция внизу панели (Local.getText(8), BounceUI.java:147)
@@ -645,11 +645,11 @@ void level_complete_render(void) {
             const char* icon = "(X)";
             int icon_w = graphics_measure_text(icon, 9);
             int icon_x = start_x + (12 - icon_w) / 2;
-            graphics_draw_text((float)icon_x, (float)text_y, icon, COLOR_TEXT_NORMAL, 9);
+            graphics_draw_text(icon_x, text_y, icon, COLOR_TEXT_NORMAL, 9);
         }
 
         // Текст кнопки
-        graphics_draw_text((float)(start_x + 12 + 4), (float)text_y, continue_text, COLOR_TEXT_NORMAL, 9);
+        graphics_draw_text(start_x + 12 + 4, text_y, continue_text, COLOR_TEXT_NORMAL, 9);
     }
 }
 

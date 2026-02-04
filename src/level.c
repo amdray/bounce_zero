@@ -48,12 +48,12 @@ static inline bool is_sprite_valid(int sprite_idx) {
 }
 
 // --- Ring foreground queue (draw after the ball) ---
-typedef struct { int sprite_idx; float x, y; int transform; } hoop_fg_item_t;
+typedef struct { int sprite_idx; int x, y; int transform; } hoop_fg_item_t;
 static hoop_fg_item_t s_hoop_fg[RING_FG_QUEUE_MAX];
 static int s_hoop_fg_count = 0;
 static inline void hoop_fg_clear(void){ s_hoop_fg_count = 0; }
 
-static inline void hoop_fg_push(int sprite_idx, float x, float y, int transform){
+static inline void hoop_fg_push(int sprite_idx, int x, int y, int transform){
     if (s_hoop_fg_count < (int)(sizeof(s_hoop_fg)/sizeof(s_hoop_fg[0]))){
         s_hoop_fg[s_hoop_fg_count++] = (hoop_fg_item_t){ sprite_idx, x, y, transform };
     }
@@ -251,7 +251,7 @@ int level_get_tile_at(int tileX, int tileY) {
 // --- Новые функции рендеринга ---
 
 // Рендер EXIT тайла: фоновые полоски (plain pass)
-static void render_exit_tile_plain(int tile_id, float destX, float destY, int worldTileX, int worldTileY) {
+static void render_exit_tile_plain(int tile_id, int destX, int destY, int worldTileX, int worldTileY) {
     if (tile_id == 9) { // EXIT - новая логика по якорю exitPos
         int local_x = worldTileX - g_level.exitPosX;
         int local_y = worldTileY - g_level.exitPosY;
@@ -264,24 +264,24 @@ static void render_exit_tile_plain(int tile_id, float destX, float destY, int wo
             u32 dark_stripe = EXIT_DARK_STRIPE_COLOUR;
             u32 fourth_stripe = EXIT_FOURTH_STRIPE_COLOUR;
 
-            float area_width = 2.0f * TILE_SIZE;
-            float area_height = 2.0f * TILE_SIZE;
+            int area_width = 2 * TILE_SIZE;
+            int area_height = 2 * TILE_SIZE;
 
             graphics_draw_rect(destX, destY, area_width, area_height, background);
-            graphics_draw_rect(destX + EXIT_STRIPE_1_X, destY, (float)EXIT_STRIPE_1_WIDTH, area_height, first_stripe);
-            graphics_draw_rect(destX + EXIT_STRIPE_2_X, destY, (float)EXIT_STRIPE_2_WIDTH, area_height, light_stripe);
-            graphics_draw_rect(destX + EXIT_STRIPE_3_X, destY, (float)EXIT_STRIPE_3_WIDTH, area_height, dark_stripe);
-            graphics_draw_rect(destX + EXIT_STRIPE_4_X, destY, (float)EXIT_STRIPE_4_WIDTH, area_height, fourth_stripe);
+            graphics_draw_rect(destX + EXIT_STRIPE_1_X, destY, EXIT_STRIPE_1_WIDTH, area_height, first_stripe);
+            graphics_draw_rect(destX + EXIT_STRIPE_2_X, destY, EXIT_STRIPE_2_WIDTH, area_height, light_stripe);
+            graphics_draw_rect(destX + EXIT_STRIPE_3_X, destY, EXIT_STRIPE_3_WIDTH, area_height, dark_stripe);
+            graphics_draw_rect(destX + EXIT_STRIPE_4_X, destY, EXIT_STRIPE_4_WIDTH, area_height, fourth_stripe);
         }
     } else if (tile_id == 10) {
-        graphics_draw_rect(destX, destY, (float)TILE_SIZE, (float)TILE_SIZE, WATER_COLOUR);
+        graphics_draw_rect(destX, destY, TILE_SIZE, TILE_SIZE, WATER_COLOUR);
     } else {
-        graphics_draw_rect(destX, destY, (float)TILE_SIZE, (float)TILE_SIZE, 0xFF888888);
+        graphics_draw_rect(destX, destY, TILE_SIZE, TILE_SIZE, 0xFF888888);
     }
 }
 
 // Рендер EXIT тайла: спрайты двери (textured pass)
-static void render_exit_tile_textured(int tile_id, float destX, float destY, int worldTileX, int worldTileY) {
+static void render_exit_tile_textured(int tile_id, int destX, int destY, int worldTileX, int worldTileY) {
     if (tile_id != 9) return;
 
     int local_x = worldTileX - g_level.exitPosX;
@@ -300,42 +300,42 @@ static void render_exit_tile_textured(int tile_id, float destX, float destY, int
     sprite_rect_t r = png_create_sprite_rect(s_tileset, srcX, srcY, TILE_SIZE, TILE_SIZE);
 
     int animationOffset = game_exit_anim_offset();
-    float doorX = destX;
-    float doorY = destY - animationOffset;
-    float areaTop = destY;
+    int doorX = destX;
+    int doorY = destY - animationOffset;
+    int areaTop = destY;
 
     if (doorY < areaTop) {
-        float clipOffset = areaTop - doorY;
+        int clipOffset = areaTop - doorY;
         if (clipOffset < TILE_SIZE) {
-            float visibleHeight = TILE_SIZE - clipOffset;
-            sprite_rect_t clipped_r = png_create_sprite_rect(s_tileset, srcX, srcY + (int)clipOffset, TILE_SIZE, (int)visibleHeight);
+            int visibleHeight = TILE_SIZE - clipOffset;
+            sprite_rect_t clipped_r = png_create_sprite_rect(s_tileset, srcX, srcY + clipOffset, TILE_SIZE, visibleHeight);
 
-            png_draw_sprite(s_tileset, &clipped_r, (int)doorX, (int)areaTop, TILE_SIZE, (int)visibleHeight);
-            png_draw_sprite_transform(s_tileset, &clipped_r, (int)(doorX + TILE_SIZE), (int)areaTop, TILE_SIZE, (int)visibleHeight, PNG_TRANSFORM_FLIP_X);
+            png_draw_sprite(s_tileset, &clipped_r, doorX, areaTop, TILE_SIZE, visibleHeight);
+            png_draw_sprite_transform(s_tileset, &clipped_r, doorX + TILE_SIZE, areaTop, TILE_SIZE, visibleHeight, PNG_TRANSFORM_FLIP_X);
 
             if (doorY + TILE_SIZE >= areaTop) {
-                png_draw_sprite_transform(s_tileset, &r, (int)doorX, (int)(doorY + TILE_SIZE), TILE_SIZE, TILE_SIZE, PNG_TRANSFORM_FLIP_Y);
-                png_draw_sprite_transform(s_tileset, &r, (int)(doorX + TILE_SIZE), (int)(doorY + TILE_SIZE), TILE_SIZE, TILE_SIZE, PNG_TRANSFORM_ROT_180);
+                png_draw_sprite_transform(s_tileset, &r, doorX, doorY + TILE_SIZE, TILE_SIZE, TILE_SIZE, PNG_TRANSFORM_FLIP_Y);
+                png_draw_sprite_transform(s_tileset, &r, doorX + TILE_SIZE, doorY + TILE_SIZE, TILE_SIZE, TILE_SIZE, PNG_TRANSFORM_ROT_180);
             }
         }
     } else {
-        png_draw_sprite(s_tileset, &r, (int)doorX, (int)doorY, TILE_SIZE, TILE_SIZE);
-        png_draw_sprite_transform(s_tileset, &r, (int)(doorX + TILE_SIZE), (int)doorY, TILE_SIZE, TILE_SIZE, PNG_TRANSFORM_FLIP_X);
-        png_draw_sprite_transform(s_tileset, &r, (int)doorX, (int)(doorY + TILE_SIZE), TILE_SIZE, TILE_SIZE, PNG_TRANSFORM_FLIP_Y);
-        png_draw_sprite_transform(s_tileset, &r, (int)(doorX + TILE_SIZE), (int)(doorY + TILE_SIZE), TILE_SIZE, TILE_SIZE, PNG_TRANSFORM_ROT_180);
+        png_draw_sprite(s_tileset, &r, doorX, doorY, TILE_SIZE, TILE_SIZE);
+        png_draw_sprite_transform(s_tileset, &r, doorX + TILE_SIZE, doorY, TILE_SIZE, TILE_SIZE, PNG_TRANSFORM_FLIP_X);
+        png_draw_sprite_transform(s_tileset, &r, doorX, doorY + TILE_SIZE, TILE_SIZE, TILE_SIZE, PNG_TRANSFORM_FLIP_Y);
+        png_draw_sprite_transform(s_tileset, &r, doorX + TILE_SIZE, doorY + TILE_SIZE, TILE_SIZE, TILE_SIZE, PNG_TRANSFORM_ROT_180);
     }
 }
 
 // Рендер движущихся шипов: фон тайла (plain pass)
-static void render_moving_spikes_tile_plain(int tileX, int tileY, float destX, float destY) {
+static void render_moving_spikes_tile_plain(int tileX, int tileY, int destX, int destY) {
     unsigned int tile = (unsigned short)g_level.tileMap[tileY][tileX];
     bool is_water = (tile & TILE_FLAG_WATER) ? true : false;
     u32 bg_color = is_water ? WATER_COLOUR : BACKGROUND_COLOUR;
-    graphics_draw_rect(destX, destY, (float)TILE_SIZE, (float)TILE_SIZE, bg_color);
+    graphics_draw_rect(destX, destY, TILE_SIZE, TILE_SIZE, bg_color);
 }
 
 // Рендер движущихся шипов: спрайты (textured pass)
-static void render_moving_spikes_tile_textured(int tileX, int tileY, float destX, float destY) {
+static void render_moving_spikes_tile_textured(int tileX, int tileY, int destX, int destY) {
     int objIndex = level_find_moving_object_at(tileX, tileY);
     if (objIndex == -1) return;
     if (!s_tileset || s_tiles_per_row <= 0) return;
@@ -345,8 +345,8 @@ static void render_moving_spikes_tile_textured(int tileX, int tileY, float destX
     int relTileX = tileX - obj->topLeft[0];
     int relTileY = tileY - obj->topLeft[1];
 
-    float offsetX = (float)obj->offset[0] - (float)(relTileX * TILE_SIZE);
-    float offsetY = (float)obj->offset[1] - (float)(relTileY * TILE_SIZE);
+    int offsetX = obj->offset[0] - (relTileX * TILE_SIZE);
+    int offsetY = obj->offset[1] - (relTileY * TILE_SIZE);
 
     if (offsetX > -3 * TILE_SIZE && offsetX < TILE_SIZE && offsetY > -3 * TILE_SIZE && offsetY < TILE_SIZE) {
         const TileMeta* t = &tile_meta_db()[10];
@@ -355,8 +355,8 @@ static void render_moving_spikes_tile_textured(int tileX, int tileY, float destX
 
         for (int dy = 0; dy < 2; dy++) {
             for (int dx = 0; dx < 2; dx++) {
-                float spriteX = destX + offsetX + (float)(dx * TILE_SIZE);
-                float spriteY = destY + offsetY + (float)(dy * TILE_SIZE);
+                int spriteX = destX + offsetX + (dx * TILE_SIZE);
+                int spriteY = destY + offsetY + (dy * TILE_SIZE);
 
                 if (spriteX < destX + TILE_SIZE && spriteX + TILE_SIZE > destX &&
                     spriteY < destY + TILE_SIZE && spriteY + TILE_SIZE > destY) {
@@ -370,7 +370,7 @@ static void render_moving_spikes_tile_textured(int tileX, int tileY, float destX
                     if (dx == 0 && dy == 1) xf = PNG_TRANSFORM_FLIP_Y;
                     if (dx == 1 && dy == 1) xf = PNG_TRANSFORM_ROT_180;
 
-                    png_draw_sprite_transform(s_tileset, &r, (int)spriteX, (int)spriteY, TILE_SIZE, TILE_SIZE, xf);
+                    png_draw_sprite_transform(s_tileset, &r, spriteX, spriteY, TILE_SIZE, TILE_SIZE, xf);
                 }
             }
         }
@@ -380,13 +380,13 @@ static void render_moving_spikes_tile_textured(int tileX, int tileY, float destX
 // REMOVED: render_dual_sprite_tile - was deprecated and unused
 
 // Рендер кольца-обруча: фон тайла (plain pass)
-static void render_hoop_tile_plain(float destX, float destY, int flags) {
+static void render_hoop_tile_plain(int destX, int destY, int flags) {
     u32 bg_color = (flags & TILE_FLAG_WATER) ? WATER_COLOUR : BACKGROUND_COLOUR;
-    graphics_draw_rect(destX, destY, (float)TILE_SIZE, (float)TILE_SIZE, bg_color);
+    graphics_draw_rect(destX, destY, TILE_SIZE, TILE_SIZE, bg_color);
 }
 
 // Рендер кольца-обруча: спрайты и очередь foreground (textured pass)
-static void render_hoop_tile_textured(const TileMeta* t, float destX, float destY, int tileID) {
+static void render_hoop_tile_textured(const TileMeta* t, int destX, int destY, int tileID) {
     if (!s_tileset || s_tiles_per_row <= 0) return;
     if (tileID < 13 || tileID > 28 || !is_sprite_valid(t->sprite_index)) return;
 
@@ -445,19 +445,19 @@ void level_render_visible_area(int cameraX, int cameraY, int screenWidth, int sc
             int tile_id = tile & TILE_ID_MASK;
             int tile_flags = original_tile_flags;
 
-            float screenX = (float)(x * TILE_SIZE - cameraX);
-            float screenY = (float)(y * TILE_SIZE - cameraY);
+            int screenX = x * TILE_SIZE - cameraX;
+            int screenY = y * TILE_SIZE - cameraY;
 
             if (tile_id == 0) {
                 u32 bg_color = is_water ? WATER_COLOUR : BACKGROUND_COLOUR;
-                graphics_draw_rect(screenX, screenY, (float)TILE_SIZE, (float)TILE_SIZE, bg_color);
+                graphics_draw_rect(screenX, screenY, TILE_SIZE, TILE_SIZE, bg_color);
                 continue;
             }
 
             if (tile_id < 0 || tile_id >= (int)tile_meta_count()) continue;
 
             if (!s_tileset || s_tiles_per_row <= 0) {
-                graphics_draw_rect(screenX, screenY, (float)TILE_SIZE, (float)TILE_SIZE, 0xFF444444);
+                graphics_draw_rect(screenX, screenY, TILE_SIZE, TILE_SIZE, 0xFF444444);
                 continue;
             }
 
@@ -465,7 +465,7 @@ void level_render_visible_area(int cameraX, int cameraY, int screenWidth, int sc
 
             if (tile_id == 9) {
                 if (is_water) {
-                    graphics_draw_rect(screenX, screenY, (float)TILE_SIZE, (float)TILE_SIZE, WATER_COLOUR);
+                    graphics_draw_rect(screenX, screenY, TILE_SIZE, TILE_SIZE, WATER_COLOUR);
                 }
                 render_exit_tile_plain(tile_id, screenX, screenY, x, y);
                 continue;
@@ -474,7 +474,7 @@ void level_render_visible_area(int cameraX, int cameraY, int screenWidth, int sc
                 continue;
             } else if (t->render_type & RENDER_COMPOSITE) {
                 if (is_water) {
-                    graphics_draw_rect(screenX, screenY, (float)TILE_SIZE, (float)TILE_SIZE, WATER_COLOUR);
+                    graphics_draw_rect(screenX, screenY, TILE_SIZE, TILE_SIZE, WATER_COLOUR);
                 }
                 render_exit_tile_plain(tile_id, screenX, screenY, x, y);
                 continue;
@@ -484,11 +484,11 @@ void level_render_visible_area(int cameraX, int cameraY, int screenWidth, int sc
             }
 
             if (is_water) {
-                graphics_draw_rect(screenX, screenY, (float)TILE_SIZE, (float)TILE_SIZE, WATER_COLOUR);
+                graphics_draw_rect(screenX, screenY, TILE_SIZE, TILE_SIZE, WATER_COLOUR);
             }
 
             if (!is_sprite_valid(t->sprite_index)) {
-                graphics_draw_rect(screenX, screenY, (float)TILE_SIZE, (float)TILE_SIZE, 0xFF444444);
+                graphics_draw_rect(screenX, screenY, TILE_SIZE, TILE_SIZE, 0xFF444444);
             }
         }
     }
@@ -513,8 +513,8 @@ void level_render_visible_area(int cameraX, int cameraY, int screenWidth, int sc
 
             const TileMeta* t = &tile_meta_db()[tile_id];
 
-            float screenX = (float)(x * TILE_SIZE - cameraX);
-            float screenY = (float)(y * TILE_SIZE - cameraY);
+            int screenX = x * TILE_SIZE - cameraX;
+            int screenY = y * TILE_SIZE - cameraY;
 
             if (tile_id == 9) {
                 render_exit_tile_textured(tile_id, screenX, screenY, x, y);

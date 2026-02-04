@@ -14,10 +14,11 @@ typedef struct {
     int is_vram;        // 1 if texture is in VRAM, 0 if in RAM
 } texture_t;
 
-// ТОЧНАЯ КОПИЯ вашей структуры sprite_rect_t
+// Sprite rect in atlas pixel coordinates (not normalized UV).
+// This keeps the game/render boundary integer and pixel-perfect.
 typedef struct {
-    float u, v;          // top-left UV (0..1)
-    float width, height; // UV size (0..1)
+    int x, y; // top-left in atlas pixels
+    int w, h; // size in atlas pixels
 } sprite_rect_t;
 
 /**
@@ -63,10 +64,10 @@ typedef enum {
  * Рекомендуется: GU_ALPHA_TEST с порогом >0 для PNG с прозрачностью.
  */
 void png_draw_sprite_uv4(texture_t* tex,
-                         float u_tl, float v_tl,
-                         float u_tr, float v_tr,
-                         float u_bl, float v_bl,
-                         float u_br, float v_br,
+                         int u_tl, int v_tl,
+                         int u_tr, int v_tr,
+                         int u_bl, int v_bl,
+                         int u_br, int v_br,
                          int x, int y, int w, int h);
 
 /**

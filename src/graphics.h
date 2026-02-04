@@ -82,7 +82,7 @@ void graphics_clear(u32 color);
  * @param h Высота прямоугольника
  * @param color Цвет в формате ABGR (тот же что и в graphics_clear())
  */
-void graphics_draw_rect(float x, float y, float w, float h, u32 color);
+void graphics_draw_rect(int x, int y, int w, int h, u32 color);
 
 /**
  * Нарисовать текст с выбором шрифта
@@ -92,7 +92,7 @@ void graphics_draw_rect(float x, float y, float w, float h, u32 color);
  * @param color Цвет текста в формате ABGR (тот же что и в graphics_clear())
  * @param font_height Высота шрифта: 9 (font9), 12 (font12), или 23 (font23)
  */
-void graphics_draw_text(float x, float y, const char* text, u32 color, int font_height);
+void graphics_draw_text(int x, int y, const char* text, u32 color, int font_height);
 
 /**
  * Измерить ширину текста для выбранного шрифта
@@ -109,7 +109,7 @@ int graphics_measure_text(const char* text, int font_height);
  * @param number Число для отрисовки
  * @param color Цвет в формате ABGR8888
  */
-void graphics_draw_number(float x, float y, int number, u32 color);
+void graphics_draw_number(int x, int y, int number, u32 color);
 
 /**
  * Измерить ширину числа для font24
@@ -142,10 +142,10 @@ int graphics_get_texturing_state(void);    // получить текущее с
  * Объединяет множественные draw вызовы в пачки для минимизации texture bind'ов
  */
 void graphics_bind_texture(texture_t* tex);         // Привязать текстуру для batch'а
-void graphics_batch_sprite(float u1, float v1, float u2, float v2, 
-                          float x, float y, float w, float h); // Добавить спрайт в batch
-void graphics_batch_sprite_colored(float u1, float v1, float u2, float v2,
-                          float x, float y, float w, float h, u32 color); // Для текста/модуляции (GU_TFX_MODULATE)
+void graphics_batch_sprite(int u1, int v1, int u2, int v2,
+                          int x, int y, int w, int h); // Добавить спрайт в batch
+void graphics_batch_sprite_colored(int u1, int v1, int u2, int v2,
+                          int x, int y, int w, int h, u32 color); // Для текста/модуляции (GU_TFX_MODULATE)
 void graphics_flush_batch(void);                    // Принудительно отрисовать накопленные спрайты
 
 

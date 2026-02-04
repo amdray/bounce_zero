@@ -66,5 +66,5 @@ void splash_render_bounce(void) {
     int text_width = graphics_measure_text(press_start_text, 12);
     int text_x = (SCREEN_WIDTH - text_width) / 2;
 
-    graphics_draw_text((float)text_x, (float)text_y, press_start_text, COLOR_TEXT_NORMAL, 12);
+    graphics_draw_text(text_x, text_y, press_start_text, COLOR_TEXT_NORMAL, 12);
 }

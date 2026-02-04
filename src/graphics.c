@@ -34,9 +34,10 @@ static int s_texturing_enabled = 0;
 // Sprite batching система (по образцу pspsdk/samples/gu/sprite)
 #define MAX_SPRITES_PER_BATCH 128
 typedef struct {
-    float u, v;
+    uint16_t u, v;
     u32 color;
-    float x, y, z;
+    short x, y, z;
+    short pad;
 } BatchVertex;
 
 typedef struct {
@@ -128,7 +129,7 @@ void graphics_clear(u32 color) {
 }
 
 
-void graphics_draw_rect(float x, float y, float w, float h, u32 color) {
+void graphics_draw_rect(int x, int y, int w, int h, u32 color) {
     // Не трогаем GU_TEXTURE_2D / GU_BLEND — вариант B
     Vertex2D* v = (Vertex2D*)sceGuGetMemory(2 * sizeof(Vertex2D));
 
@@ -194,10 +195,10 @@ int utf8_decode_to_codepoint(const char* str, int* bytes_read) {
     return 0x20;
 }
 
-void graphics_draw_text(float x, float y, const char* text, u32 color, int font_height) {
+void graphics_draw_text(int x, int y, const char* text, u32 color, int font_height) {
     if (!text) return;
-    int cur_x = (int)x;
-    int base_y = (int)y;
+    int cur_x = x;
+    int base_y = y;
     int i = 0;
     int spacing;
 
@@ -241,13 +242,13 @@ void graphics_draw_text(float x, float y, const char* text, u32 color, int font_
                 sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
             }
 
-            float u1 = (float)glyph->x;
-            float v1 = (float)glyph->y;
-            float u2 = u1 + (float)width;
-            float v2 = v1 + (float)height;
+            int u1 = glyph->x;
+            int v1 = glyph->y;
+            int u2 = u1 + width;
+            int v2 = v1 + height;
             graphics_batch_sprite_colored(u1, v1, u2, v2,
-                                          (float)cur_x, (float)base_y,
-                                          (float)width, (float)height, color);
+                                          cur_x, base_y,
+                                          width, height, color);
         }
 
         cur_x += width + spacing;
@@ -295,12 +296,12 @@ int graphics_measure_text(const char* text, int font_height) {
     return width;
 }
 
-void graphics_draw_number(float x, float y, int number, u32 color) {
+void graphics_draw_number(int x, int y, int number, u32 color) {
     char buffer[32];
     snprintf(buffer, sizeof(buffer), "%d", number);
 
-    int cur_x = (int)x;
-    int cur_y = (int)y;
+    int cur_x = x;
+    int cur_y = y;
 
     for (int i = 0; buffer[i] != '\0'; i++) {
         if (buffer[i] >= '0' && buffer[i] <= '9') {
@@ -402,7 +403,7 @@ void graphics_flush_batch(void) {
     
     if (s_batch.current_texture) {
         graphics_bind_texture(s_batch.current_texture);
-        // НЕ дублируем TexScale/Offset — они уже выставляются внутри graphics_bind_texture()
+        // Параметры текстуры выставляются внутри graphics_bind_texture().
     }
     
     // «Железобезопасная» альтернатива - копируем в GE память
@@ -416,7 +417,7 @@ void graphics_flush_batch(void) {
     
     // Отрисовать всю пачку одним вызовом
     sceGuDrawArray(GU_SPRITES, 
-                   GU_TEXTURE_32BITF|GU_COLOR_8888|GU_VERTEX_32BITF|GU_TRANSFORM_2D, 
+                   GU_TEXTURE_16BIT|GU_COLOR_8888|GU_VERTEX_16BIT|GU_TRANSFORM_2D, 
                    vcount, 0, vtx);
     
     s_batch.count = 0; // Очистить batch для новых спрайтов
@@ -444,13 +445,13 @@ void graphics_bind_texture(texture_t* tex) {
 }
 
 // Добавить спрайт в batch (не отрисовывает сразу!)
-void graphics_batch_sprite(float u1, float v1, float u2, float v2, 
-                          float x, float y, float w, float h) {
+void graphics_batch_sprite(int u1, int v1, int u2, int v2,
+                          int x, int y, int w, int h) {
     graphics_batch_sprite_colored(u1, v1, u2, v2, x, y, w, h, 0xFFFFFFFF);
 }
 
-void graphics_batch_sprite_colored(float u1, float v1, float u2, float v2,
-                          float x, float y, float w, float h, u32 color) {
+void graphics_batch_sprite_colored(int u1, int v1, int u2, int v2,
+                          int x, int y, int w, int h, u32 color) {
     // Flush если batch переполнен
     if (s_batch.count >= MAX_SPRITES_PER_BATCH) {
         graphics_flush_batch();
@@ -459,20 +460,22 @@ void graphics_batch_sprite_colored(float u1, float v1, float u2, float v2,
     int idx = s_batch.count * 2; // 2 вершины на спрайт
     
     // Первая вершина (левый верхний угол)
-    s_batch.vertices[idx].u = u1;
-    s_batch.vertices[idx].v = v1;
+    s_batch.vertices[idx].u = (uint16_t)u1;
+    s_batch.vertices[idx].v = (uint16_t)v1;
     s_batch.vertices[idx].color = color;
-    s_batch.vertices[idx].x = x;
-    s_batch.vertices[idx].y = y;
-    s_batch.vertices[idx].z = 0.0f;
+    s_batch.vertices[idx].x = (short)x;
+    s_batch.vertices[idx].y = (short)y;
+    s_batch.vertices[idx].z = 0;
+    s_batch.vertices[idx].pad = 0;
     
     // Вторая вершина (правый нижний угол)
-    s_batch.vertices[idx + 1].u = u2;
-    s_batch.vertices[idx + 1].v = v2;
+    s_batch.vertices[idx + 1].u = (uint16_t)u2;
+    s_batch.vertices[idx + 1].v = (uint16_t)v2;
     s_batch.vertices[idx + 1].color = color;
-    s_batch.vertices[idx + 1].x = x + w;
-    s_batch.vertices[idx + 1].y = y + h;
-    s_batch.vertices[idx + 1].z = 0.0f;
+    s_batch.vertices[idx + 1].x = (short)(x + w);
+    s_batch.vertices[idx + 1].y = (short)(y + h);
+    s_batch.vertices[idx + 1].z = 0;
+    s_batch.vertices[idx + 1].pad = 0;
     
     s_batch.count++;
 }
