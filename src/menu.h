@@ -47,18 +47,4 @@ menu_type_t menu_get_type_from_game_state(int game_state);
 // Очистка ресурсов меню
 void menu_cleanup(void);
 
-// УСТАРЕВШИЕ ФУНКЦИИ (для совместимости, будут удалены)
-void menu_update(void);
-void menu_render(void);
-void level_select_update(void);
-void level_select_render(void);
-void high_score_update(void);
-void high_score_render(void);
-void game_over_update(void);
-void game_over_render(void);
-void level_complete_update(void);
-void level_complete_render(void);
-void instructions_update(void);
-void instructions_render(void);
-
 #endif

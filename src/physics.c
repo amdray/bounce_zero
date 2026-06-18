@@ -448,13 +448,10 @@ static bool testTile(Player* p, int tileY, int tileX, bool canMove) {
     int tile = g_level.tileMap[tileY][tileX];
     int tileID = tile & TILE_ID_MASK;  // Убираем флаги
     
-    // Получаем метаданные тайла (нужны для orientation в thinCollide)
+    // Валидация ID против таблицы метаданных: неизвестные тайлы пропускаем.
     if ((uint32_t)tileID >= tile_meta_count()) {
         return canMove; // Неизвестный тайл - пропускаем
     }
-    
-    const TileMeta* tileMeta = &tile_meta_db()[tileID];
-    (void)tileMeta; // Помечаем как используемую (для thinCollide через вызовы)
     
     // Прямая обработка коллизий по ID тайла (убран избыточный collision_type)
     if (tileID == 1) {
@@ -903,10 +900,6 @@ void player_update(Player* p) {
         }
     }
 
-    // Границы уровня
-    int levelW = g_level.width * TILE_SIZE;
-    if (p->xPos < p->mHalfBallSize) p->xPos = p->mHalfBallSize;
-    if (p->xPos > levelW - p->mHalfBallSize) p->xPos = levelW - p->mHalfBallSize;
 }
 
 static bool rectCollide(int x1, int y1, int x2, int y2, int rx1, int ry1, int rx2, int ry2) {

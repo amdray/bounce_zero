@@ -210,11 +210,28 @@ static ModalPanel draw_modal_panel(u32 background_color, u32 panel_color, const 
     return panel;
 }
 
+static void draw_modal_score(const ModalPanel* panel, int y, int score, u32 color) {
+    int w = graphics_measure_number(score);
+    graphics_draw_number(panel->center_x - (w / 2), y, score, color);
+}
+
+static void draw_modal_x_button(const ModalPanel* panel, const char* text, int y, u32 color) {
+    int text_w = graphics_measure_text(text, 9);
+    int total_width = 12 + 4 + text_w;
+    int start_x = panel->center_x - (total_width / 2);
+
+    const char* icon = "(X)";
+    int icon_w = graphics_measure_text(icon, 9);
+    int icon_x = start_x + (12 - icon_w) / 2;
+    graphics_draw_text(icon_x, y, icon, color, 9);
+    graphics_draw_text(start_x + 12 + 4, y, text, color, 9);
+}
+
 void menu_init(void) {
     // Инициализация меню (пока пустая)
 }
 
-void menu_update(void) {
+static void menu_update(void) {
     // Убедиться что стартовая позиция не на недоступном Continue
     if(g_game.menu_selection == MENU_CONTINUE && !game_can_continue()) {
         g_game.menu_selection = MENU_NEW_GAME; // Начать с New Game
@@ -256,7 +273,7 @@ void menu_update(void) {
     }
 }
 
-void instructions_update(void) {
+static void instructions_update(void) {
     // Навигация между частями
     if(input_pressed(PSP_CTRL_LEFT) && current_instruction_page > 0) {
         current_instruction_page--;
@@ -272,7 +289,7 @@ void instructions_update(void) {
     }
 }
 
-void menu_render(void) {
+static void menu_render(void) {
 
     // UI без текстурной модуляции
     graphics_begin_plain();
@@ -325,7 +342,7 @@ void menu_render(void) {
     // TODO: render menu icons here
 }
 
-void instructions_render(void) {
+static void instructions_render(void) {
     graphics_begin_plain();
 
     // Шапка "Инструкции" (шрифт 23, getText(13), BounceUI.java:107)
@@ -356,7 +373,7 @@ void instructions_render(void) {
     graphics_draw_text(panel.center_x - (page_w / 2), text_y, page_info, COLOR_TEXT_NORMAL, 9);
 }
 
-void level_select_update(void) {
+static void level_select_update(void) {
     const int columns = LEVEL_GRID_COLUMNS;
     const int rows = (MAX_LEVEL + columns - 1) / columns;
 
@@ -418,7 +435,7 @@ void level_select_update(void) {
     }
 }
 
-void level_select_render(void) {
+static void level_select_render(void) {
     const int center_x = SCREEN_WIDTH / 2;
     
     // UI цифры из битмапа — без текстурной модуляции
@@ -470,7 +487,7 @@ void level_select_render(void) {
     }
 }
 
-void high_score_update(void) {
+static void high_score_update(void) {
     // Возврат в меню (как в оригинале mBackCmd)
     if(input_pressed(PSP_CTRL_CROSS) || 
        input_pressed(PSP_CTRL_CIRCLE) || 
@@ -479,7 +496,7 @@ void high_score_update(void) {
     }
 }
 
-void high_score_render(void) {
+static void high_score_render(void) {
     SaveData* save = save_get_data();
 
     // UI без текстурной модуляции
@@ -497,43 +514,22 @@ void high_score_render(void) {
     text_y = panel.y + 60;
 
     // Лучший счёт (красный, шрифт 24)
-    {
-        int w = graphics_measure_number(save->best_score);
-        graphics_draw_number(panel.center_x - (w / 2), text_y, save->best_score, COLOR_SELECTION_BG);
-    }
+    draw_modal_score(&panel, text_y, save->best_score, COLOR_SELECTION_BG);
 
     // Кнопка "X - Continue/Return" - фиксированная позиция внизу панели
     text_y = panel.y + panel.h - 25;  // 25px от низа панели
-    {
-        const char* continue_text = local_get_text(QTJ_BOUN_BACK);
-        int w = graphics_measure_text(continue_text, 9);
-
-        // Полная ширина блока: иконка (12px диаметр) + отступ (4px) + текст
-        int total_width = 12 + 4 + w;
-        int start_x = panel.center_x - (total_width / 2);
-
-        // Иконка кнопки X (текстом)
-        {
-            const char* icon = "(X)";
-            int icon_w = graphics_measure_text(icon, 9);
-            int icon_x = start_x + (12 - icon_w) / 2;
-            graphics_draw_text(icon_x, text_y, icon, COLOR_TEXT_NORMAL, 9);
-        }
-
-        // Текст кнопки
-        graphics_draw_text(start_x + 12 + 4, text_y, continue_text, COLOR_TEXT_NORMAL, 9);
-    }
+    draw_modal_x_button(&panel, local_get_text(QTJ_BOUN_BACK), text_y, COLOR_TEXT_NORMAL);
 
 }
 
-void game_over_update(void) {
+static void game_over_update(void) {
     // Возврат в меню только по X (Continue) как в оригинале
     if(input_pressed(PSP_CTRL_CROSS)) {
         g_game.state = STATE_MENU;
     }
 }
 
-void game_over_render(void) {
+static void game_over_render(void) {
     // UI без текстурной модуляции
     graphics_begin_plain();
     
@@ -554,39 +550,18 @@ void game_over_render(void) {
     text_y = panel.y + 60;
 
     // Только число счёта, без "Score:" - красный, шрифт 24 (BounceUI.java:136)
-    {
-        int w = graphics_measure_number(g_game.score);
-        graphics_draw_number(panel.center_x - (w / 2), text_y, g_game.score, COLOR_SELECTION_BG);
-    }
+    draw_modal_score(&panel, text_y, g_game.score, COLOR_SELECTION_BG);
 
     // Кнопка "X - OK" - фиксированная позиция внизу панели (Local.getText(19), BounceUI.java:125)
     text_y = panel.y + panel.h - 25;  // 25px от низа панели
-    {
-        const char* ok_text = local_get_text(QTJ_BOUN_OK);
-        int w = graphics_measure_text(ok_text, 9);
-
-        // Полная ширина блока: иконка (12px диаметр) + отступ (4px) + текст
-        int total_width = 12 + 4 + w;
-        int start_x = panel.center_x - (total_width / 2);
-
-        // Иконка кнопки X (текстом)
-        {
-            const char* icon = "(X)";
-            int icon_w = graphics_measure_text(icon, 9);
-            int icon_x = start_x + (12 - icon_w) / 2;
-            graphics_draw_text(icon_x, text_y, icon, COLOR_TEXT_NORMAL, 9);
-        }
-
-        // Текст кнопки
-        graphics_draw_text(start_x + 12 + 4, text_y, ok_text, COLOR_TEXT_NORMAL, 9);
-    }
+    draw_modal_x_button(&panel, local_get_text(QTJ_BOUN_OK), text_y, COLOR_TEXT_NORMAL);
 }
 
 // =============================================================================
 // LEVEL COMPLETE ЭКРАН
 // =============================================================================
 
-void level_complete_update(void) {
+static void level_complete_update(void) {
     // X = продолжить (следующий уровень или Game Over)
     if(input_pressed(PSP_CTRL_CROSS)) {
         // Проверяем если не последний уровень (до 11) - переходим на следующий
@@ -604,7 +579,7 @@ void level_complete_update(void) {
     }
 }
 
-void level_complete_render(void) {
+static void level_complete_render(void) {
     // UI без текстурной модуляции
     graphics_begin_plain();
 
@@ -623,34 +598,13 @@ void level_complete_render(void) {
         graphics_draw_text(panel.center_x - (w / 2), text_y, level_title, COLOR_TEXT_NORMAL, 9);
     }
 
-    // Счёт - красный, шрифт 24, фиксированная позиция (как в high_score) (BounceUI.java:152)
-    text_y = panel.y + 60;  // Фиксированная позиция (одинаковая в high_score и level_complete)
-    {
-        int w = graphics_measure_number(g_game.score);
-        graphics_draw_number(panel.center_x - (w / 2), text_y, g_game.score, COLOR_SELECTION_BG);
-    }
+    // Счёт - чёрный, шрифт 24, фиксированная позиция (BounceUI.java:152)
+    text_y = panel.y + 60;
+    draw_modal_score(&panel, text_y, g_game.score, COLOR_TEXT_NORMAL);
 
     // Кнопка "X - Continue" - фиксированная позиция внизу панели (Local.getText(8), BounceUI.java:147)
     text_y = panel.y + panel.h - 25;  // 25px от низа панели (как в Game Over)
-    {
-        const char* continue_text = local_get_text(QTJ_BOUN_CONTINUE);
-        int w = graphics_measure_text(continue_text, 9);
-
-        // Полная ширина блока: иконка (12px диаметр) + отступ (4px) + текст
-        int total_width = 12 + 4 + w;
-        int start_x = panel.center_x - (total_width / 2);
-
-        // Иконка кнопки X (текстом)
-        {
-            const char* icon = "(X)";
-            int icon_w = graphics_measure_text(icon, 9);
-            int icon_x = start_x + (12 - icon_w) / 2;
-            graphics_draw_text(icon_x, text_y, icon, COLOR_TEXT_NORMAL, 9);
-        }
-
-        // Текст кнопки
-        graphics_draw_text(start_x + 12 + 4, text_y, continue_text, COLOR_TEXT_NORMAL, 9);
-    }
+    draw_modal_x_button(&panel, local_get_text(QTJ_BOUN_CONTINUE), text_y, COLOR_TEXT_NORMAL);
 }
 
 void menu_cleanup(void) {
@@ -661,70 +615,58 @@ void menu_cleanup(void) {
 // НОВЫЙ УНИФИЦИРОВАННЫЙ API
 // =============================================================================
 
+typedef void (*menu_fn_t)(void);
+
+typedef struct {
+    menu_fn_t update;
+    menu_fn_t render;
+} menu_dispatch_entry_t;
+
+static const menu_dispatch_entry_t s_menu_dispatch[] = {
+    [MENU_TYPE_MAIN] = { menu_update, menu_render },
+    [MENU_TYPE_LEVEL_SELECT] = { level_select_update, level_select_render },
+    [MENU_TYPE_HIGH_SCORE] = { high_score_update, high_score_render },
+    [MENU_TYPE_GAME_OVER] = { game_over_update, game_over_render },
+    [MENU_TYPE_LEVEL_COMPLETE] = { level_complete_update, level_complete_render },
+    [MENU_TYPE_INSTRUCTIONS] = { instructions_update, instructions_render }
+};
+
+static const menu_type_t s_game_state_to_menu_type[STATE_EXIT + 1] = {
+    [STATE_MENU] = MENU_TYPE_MAIN,
+    [STATE_LEVEL_SELECT] = MENU_TYPE_LEVEL_SELECT,
+    [STATE_HIGH_SCORE] = MENU_TYPE_HIGH_SCORE,
+    [STATE_GAME_OVER] = MENU_TYPE_GAME_OVER,
+    [STATE_LEVEL_COMPLETE] = MENU_TYPE_LEVEL_COMPLETE,
+    [STATE_INSTRUCTIONS] = MENU_TYPE_INSTRUCTIONS
+};
+
 // Универсальная функция обновления меню
 void menu_update_by_type(menu_type_t type) {
-    switch (type) {
-        case MENU_TYPE_MAIN:
-            menu_update();
-            break;
-        case MENU_TYPE_LEVEL_SELECT:
-            level_select_update();
-            break;
-        case MENU_TYPE_HIGH_SCORE:
-            high_score_update();
-            break;
-        case MENU_TYPE_GAME_OVER:
-            game_over_update();
-            break;
-        case MENU_TYPE_LEVEL_COMPLETE:
-            level_complete_update();
-            break;
-        case MENU_TYPE_INSTRUCTIONS:
-            instructions_update();
-            break;
+    if ((unsigned)type >= (sizeof(s_menu_dispatch) / sizeof(s_menu_dispatch[0]))) {
+        return;
+    }
+
+    if (s_menu_dispatch[type].update) {
+        s_menu_dispatch[type].update();
     }
 }
 
 // Универсальная функция рендеринга меню
 void menu_render_by_type(menu_type_t type) {
-    switch (type) {
-        case MENU_TYPE_MAIN:
-            menu_render();
-            break;
-        case MENU_TYPE_LEVEL_SELECT:
-            level_select_render();
-            break;
-        case MENU_TYPE_HIGH_SCORE:
-            high_score_render();
-            break;
-        case MENU_TYPE_GAME_OVER:
-            game_over_render();
-            break;
-        case MENU_TYPE_LEVEL_COMPLETE:
-            level_complete_render();
-            break;
-        case MENU_TYPE_INSTRUCTIONS:
-            instructions_render();
-            break;
+    if ((unsigned)type >= (sizeof(s_menu_dispatch) / sizeof(s_menu_dispatch[0]))) {
+        return;
+    }
+
+    if (s_menu_dispatch[type].render) {
+        s_menu_dispatch[type].render();
     }
 }
 
 // Хелпер: преобразование game state в menu type
 menu_type_t menu_get_type_from_game_state(int game_state) {
-    switch (game_state) {
-        case STATE_MENU:
-            return MENU_TYPE_MAIN;
-        case STATE_LEVEL_SELECT:
-            return MENU_TYPE_LEVEL_SELECT;
-        case STATE_HIGH_SCORE:
-            return MENU_TYPE_HIGH_SCORE;
-        case STATE_GAME_OVER:
-            return MENU_TYPE_GAME_OVER;
-        case STATE_LEVEL_COMPLETE:
-            return MENU_TYPE_LEVEL_COMPLETE;
-        case STATE_INSTRUCTIONS:
-            return MENU_TYPE_INSTRUCTIONS;
-        default:
-            return MENU_TYPE_MAIN; // Fallback
+    if (game_state < 0 || game_state > STATE_EXIT) {
+        return MENU_TYPE_MAIN;
     }
+
+    return s_game_state_to_menu_type[game_state];
 }

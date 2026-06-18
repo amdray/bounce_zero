@@ -1,8 +1,7 @@
 #include "graphics.h"
-#include "font_atlas.h"
-#include "font24.h"
-#include "types.h"  // Для SCREEN_WIDTH/SCREEN_HEIGHT
-#include "png.h"    // Для texture_t
+#include "cbmf_fonts.h"
+#include "types.h"
+#include "png.h"
 #include <pspgu.h>
 #include <pspdisplay.h>
 #include <pspkernel.h>
@@ -10,6 +9,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 // Используем константы из graphics.h для VRAM буферов
 // (локальные #define заменены на глобальные константы)
@@ -48,23 +48,8 @@ typedef struct {
 
 static SpriteBatch s_batch;
 
-// CLUT для T4 шрифтов: index 0 = прозрачный, index 1 = белый
-static u32 s_font_clut[16] __attribute__((aligned(16)));
-
 // Forward declarations
 static void batch_init(void);
-
-static void font_set_clut_fixed(void) {
-    s_font_clut[0] = 0x00000000; // прозрачный
-    s_font_clut[1] = 0xFFFFFFFF; // белый
-    for (int i = 2; i < 16; i++) {
-        s_font_clut[i] = 0x00000000;
-    }
-
-    sceKernelDcacheWritebackRange(s_font_clut, sizeof(s_font_clut));
-    sceGuClutMode(GU_PSM_8888, 0, 0xFF, 0);
-    sceGuClutLoad(2, s_font_clut); // 16 цветов = 2 блока
-}
 
 // Простые примитивы без текстур
 typedef struct {
@@ -107,8 +92,7 @@ void graphics_init(void) {
     // Инвариант: начинаем кадр в plain-режиме (текстуры выключены)
     s_texturing_enabled = 0;
     
-    // Подготовить atlas-данные для GU (T4, чтение из RAM)
-    font_atlas_prepare();
+    cbmf_fonts_init();
 
     // Инициализация batch системы
     batch_init();
@@ -116,6 +100,7 @@ void graphics_init(void) {
 
 void graphics_start_frame(void) {
     sceGuStart(GU_DIRECT, s_list);
+    s_batch.current_texture = NULL;
 }
 
 void graphics_set_scissor_fullscreen(void) {
@@ -147,204 +132,42 @@ void graphics_draw_rect(int x, int y, int w, int h, u32 color) {
 }
 
 
-// Декодирование UTF-8 в Unicode codepoint
-int utf8_decode_to_codepoint(const char* str, int* bytes_read) {
-    unsigned char c = (unsigned char)str[0];
-    *bytes_read = 1;
-
-    if (c < 0x80) {
-        return c;
-    }
-
-    if ((c & 0xE0) == 0xC0) {
-        unsigned char c2 = (unsigned char)str[1];
-        if (c2 == '\0' || (c2 & 0xC0) != 0x80) {
-            return 0x20;
-        }
-        *bytes_read = 2;
-        return ((c & 0x1F) << 6) | (c2 & 0x3F);
-    }
-
-    if ((c & 0xF0) == 0xE0) {
-        unsigned char c2 = (unsigned char)str[1];
-        unsigned char c3 = (unsigned char)str[2];
-        if (c2 == '\0' || c3 == '\0') {
-            return 0x20;
-        }
-        if ((c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80) {
-            return 0x20;
-        }
-        *bytes_read = 3;
-        return ((c & 0x0F) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F);
-    }
-
-    if ((c & 0xF8) == 0xF0) {
-        unsigned char c2 = (unsigned char)str[1];
-        unsigned char c3 = (unsigned char)str[2];
-        unsigned char c4 = (unsigned char)str[3];
-        if (c2 == '\0' || c3 == '\0' || c4 == '\0') {
-            return 0x20;
-        }
-        if ((c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80 || (c4 & 0xC0) != 0x80) {
-            return 0x20;
-        }
-        *bytes_read = 4;
-        return ((c & 0x07) << 18) | ((c2 & 0x3F) << 12) | ((c3 & 0x3F) << 6) | (c4 & 0x3F);
-    }
-
-    return 0x20;
-}
 
 void graphics_draw_text(int x, int y, const char* text, u32 color, int font_height) {
     if (!text) return;
-    int cur_x = x;
-    int base_y = y;
-    int i = 0;
-    int spacing;
+    CbmfPspRenderer *r = cbmf_fonts_get_renderer(font_height);
+    if (!r) return;
 
-    if (font_height == 23) {
-        spacing = FONT23_SPACING;
-    } else if (font_height == 12) {
-        spacing = FONT12_SPACING;
-    } else {
-        spacing = FONT9_SPACING;
-    }
-
-    const FontAtlas* atlas = font_atlas_get(font_height);
-    if (!atlas) return;
-
-    int current_page = -1;
-    texture_t* current_tex = NULL;
-
-    // Изолируем текст от возможного прошлого батча
     graphics_flush_batch();
     graphics_begin_textured();
-    font_set_clut_fixed();
-    sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
     sceGuEnable(GU_ALPHA_TEST);
     sceGuAlphaFunc(GU_GREATER, 0, 0xFF);
-    while (text[i] != '\0') {
-        int bytes_read;
-        int cp = utf8_decode_to_codepoint(&text[i], &bytes_read);
-        const FontGlyph* glyph = font_atlas_lookup(atlas, (u32)cp);
-        if (!glyph) break;
 
-        int width = glyph->w;
-        int height = glyph->h;
+    cbmf_psp_draw_utf8(r, x, y, text, color);
 
-        if (width > 0) {
-            if (glyph->page != (u8)current_page) {
-                current_page = glyph->page;
-                current_tex = (texture_t*)&atlas->pages[current_page];
-                graphics_flush_batch();
-                graphics_bind_texture(current_tex);
-                font_set_clut_fixed();
-                sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
-            }
-
-            int u1 = glyph->x;
-            int v1 = glyph->y;
-            int u2 = u1 + width;
-            int v2 = v1 + height;
-            graphics_batch_sprite_colored(u1, v1, u2, v2,
-                                          cur_x, base_y,
-                                          width, height, color);
-        }
-
-        cur_x += width + spacing;
-        i += bytes_read;
-    }
-
-    graphics_flush_batch();
     sceGuDisable(GU_ALPHA_TEST);
-    sceGuTexFunc(GU_TFX_REPLACE, GU_TCC_RGBA);
     graphics_begin_plain();
 }
 
 int graphics_measure_text(const char* text, int font_height) {
     if (!text) return 0;
-    int width = 0;
-    int i = 0;
-
-    int spacing;
-    if (font_height == 23) {
-        spacing = FONT23_SPACING;
-    } else if (font_height == 12) {
-        spacing = FONT12_SPACING;
-    } else {
-        spacing = FONT9_SPACING;
-    }
-
-    const FontAtlas* atlas = font_atlas_get(font_height);
-    if (!atlas) return 0;
-
-    while (text[i] != '\0') {
-        int bytes_read;
-        int cp = utf8_decode_to_codepoint(&text[i], &bytes_read);
-        const FontGlyph* glyph = font_atlas_lookup(atlas, (u32)cp);
-        int glyph_width = glyph ? glyph->w : 0;
-        width += glyph_width;
-
-        // Добавить spacing только между символами (не после последнего)
-        int next_i = i + bytes_read;
-        if (text[next_i] != '\0') {
-            width += spacing;
-        }
-
-        i = next_i;
-    }
-    return width;
+    const CbmfFont *f = cbmf_fonts_get_font(font_height);
+    if (!f) return 0;
+    int32_t w = 0;
+    cbmf_text_width_utf8(f, text, &w);
+    return (int)w;
 }
 
 void graphics_draw_number(int x, int y, int number, u32 color) {
-    char buffer[32];
-    snprintf(buffer, sizeof(buffer), "%d", number);
-
-    int cur_x = x;
-    int cur_y = y;
-
-    for (int i = 0; buffer[i] != '\0'; i++) {
-        if (buffer[i] >= '0' && buffer[i] <= '9') {
-            int digit = buffer[i] - '0';
-            const Glyph24* glyph = font24_get_digit(digit);
-
-            for (int row = 0; row < FONT24_HEIGHT; row++) {
-                for (int col = 0; col < glyph->width; col++) {
-                    if (glyph->row[row] & (1 << (15 - col))) {
-                        graphics_draw_rect(cur_x + col, cur_y + row, 1, 1, color);
-                    }
-                }
-            }
-
-            cur_x += glyph->width + FONT24_SPACING;
-        } else if (buffer[i] == '-') {
-            graphics_draw_rect(cur_x, cur_y + FONT24_HEIGHT / 2, 8, 2, color);
-            cur_x += 10;
-        }
-    }
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%d", number);
+    graphics_draw_text(x, y, buf, color, 24);
 }
 
 int graphics_measure_number(int number) {
-    char buffer[32];
-    snprintf(buffer, sizeof(buffer), "%d", number);
-
-    int width = 0;
-
-    for (int i = 0; buffer[i] != '\0'; i++) {
-        if (buffer[i] >= '0' && buffer[i] <= '9') {
-            int digit = buffer[i] - '0';
-            const Glyph24* glyph = font24_get_digit(digit);
-            width += glyph->width;
-
-            if (buffer[i + 1] != '\0') {
-                width += FONT24_SPACING;
-            }
-        } else if (buffer[i] == '-') {
-            width += 10;
-        }
-    }
-
-    return width;
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%d", number);
+    return graphics_measure_text(buf, 24);
 }
 
 // Единое управление состоянием текстур
@@ -383,8 +206,8 @@ void graphics_end_frame(void) {
 }
 
 void graphics_shutdown(void) {
-    graphics_flush_batch(); // Убедимся что все спрайты отрисованы перед завершением
-    
+    graphics_flush_batch();
+    cbmf_fonts_shutdown();
     sceGuDisplay(GU_FALSE);
     sceGuTerm();
 }

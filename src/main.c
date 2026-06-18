@@ -81,6 +81,19 @@ int main(void) {
         const game_state_handler_t* handler = game_get_state_handler(g_game.state);
         if (!handler) break;
         if (g_game.state != prev_state) {
+            const game_state_handler_t* prev_handler = game_get_state_handler(prev_state);
+            const int was_fixed = (prev_handler && prev_handler->tick_mode == GAME_TICK_FIXED);
+            const int is_fixed = (handler->tick_mode == GAME_TICK_FIXED);
+
+            // Канонично как в Java TileCanvas: stop() сбрасывает состояние таймера,
+            // start() запускает новый 30ms таймер с немедленным первым тиком.
+            if (was_fixed && !is_fixed) {
+                physics_time_acc_ms = 0;
+            } else if (!was_fixed && is_fixed) {
+                prev_time_ms = sceKernelGetSystemTimeWide() / 1000ULL;
+                physics_time_acc_ms = PHYSICS_DT_MS;
+            }
+
             if (g_game.state == STATE_MENU && prev_state != STATE_MENU) {
                 save_flush();
             }
@@ -104,7 +117,7 @@ int main(void) {
                 g_game.state = STATE_MENU;
             }
 
-            // Аккумулятор времени для вызова game_update() ровно раз в 30 мс
+            // Аккумулятор времени для вызова game_state_update() ровно раз в 30 мс
             unsigned long long now_ms = sceKernelGetSystemTimeWide() / 1000ULL;
             int delta_ms = (int)(now_ms - prev_time_ms);
             prev_time_ms = now_ms;

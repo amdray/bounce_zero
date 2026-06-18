@@ -9,9 +9,6 @@
 #define VRAM_BUFFER_WIDTH  512
 #define VRAM_BUFFER_HEIGHT 272
 
-#define FONT9_SPACING 0
-#define FONT12_SPACING 0
-#define FONT23_SPACING 0
 
 #ifdef __cplusplus
 extern "C" {
@@ -119,14 +116,6 @@ void graphics_draw_number(int x, int y, int number, u32 color);
 int graphics_measure_number(int number);
 
 
-
-/**
- * Декодировать UTF-8 символ в Unicode codepoint
- * @param str UTF-8 строка
- * @param bytes_read Количество прочитанных байт
- * @return Unicode codepoint, для ошибки возвращает пробел U+0020
- */
-int utf8_decode_to_codepoint(const char* str, int* bytes_read);
 
 /**
  * Единое управление состоянием текстур

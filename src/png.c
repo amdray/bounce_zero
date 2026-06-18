@@ -180,6 +180,7 @@ texture_t* png_load_texture_vram(const char* path) {
     // Создаем текстуру с unified cleanup для предотвращения утечек памяти
     texture_t* tex = NULL;
     unsigned char* tex_data = NULL;
+    int use_vram = 0;
     
     tex = (texture_t*)malloc(sizeof(texture_t));
     if (!tex) {
@@ -200,7 +201,7 @@ texture_t* png_load_texture_vram(const char* path) {
     
     // Выделяем память для текстуры - сначала VRAM, при нехватке fallback в RAM
     size_t tex_size = (size_t)tex_width * (size_t)tex_height * 4;
-    int use_vram = 1;
+    use_vram = 1;
     tex_data = getStaticVramTexture(tex_width, tex_height, GU_PSM_8888);
     if (!tex_data) {
         // VRAM переполнена - fallback в RAM  

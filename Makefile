@@ -1,5 +1,5 @@
 TARGET = Bounce
-OBJS = src/main.o src/graphics.o src/input.o src/game.o src/physics.o src/level.o src/png.o src/font_atlas.o src/font9_atlas.o src/font12_atlas.o src/font23_atlas.o src/font24.o src/menu.o src/tile_table.o src/sound.o src/save.o src/local.o src/local_extra.o src/splash.o
+OBJS = src/main.o src/graphics.o src/input.o src/game.o src/physics.o src/level.o src/png.o src/cbmf.o src/cbmf_psp.o src/cbmf_fonts.o src/menu.o src/tile_table.o src/sound.o src/save.o src/local.o src/local_extra.o src/splash.o
 
 INCDIR = src/
 CFLAGS = -O2 -G0 -Wall -Wextra -Wshadow -Wfloat-conversion -Werror=implicit-function-declaration -std=c99 -MMD -MP -Isrc
@@ -38,9 +38,10 @@ default: $(EXTRA_TARGETS)
 	@rsync -ru --size-only levels/ $(RELEASE_DIR)/levels/
 	@rsync -ru --size-only sounds/ $(RELEASE_DIR)/sounds/
 	@rsync -ru --size-only lang/   $(RELEASE_DIR)/lang/
+	@rsync -ru --size-only fonts/  $(RELEASE_DIR)/fonts/
 	@rm -f Bounce.elf
 	@mkdir -p $(BACKUP_DIR)
-	@zip -rq "$(BACKUP_FILE)" Makefile icons levels lang src \
+	@zip -rq "$(BACKUP_FILE)" Makefile icons levels lang fonts src \
 	    -x "src/*.o" -x "src/*.d"
 	@echo "Done: release/ + backup/$(TIMESTAMP).src.zip"
 

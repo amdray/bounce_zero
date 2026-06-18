@@ -514,15 +514,6 @@ void game_state_render(void) {
     }
 }
 
-void game_update(void) {
-    game_state_update();
-}
-
-void game_render(void) {
-    game_state_render();
-}
-
-
 // Добавляем функцию cleanup для game
 void game_shutdown(void) {
     // Освобождаем splash текстуры

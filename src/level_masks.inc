@@ -1,6 +1,6 @@
 // level_masks.inc
 // Данные масок из оригинальной Java-версии Bounce.
-// Подключать только в level.c (static linkage).
+// Подключать только в physics.c (static linkage).
 
 #include <stdint.h>
 

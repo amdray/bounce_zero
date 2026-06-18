@@ -8,13 +8,20 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <pspkernel.h>  // Для sceKernelDcacheWritebackRange
 
 // Статические переменные для респауна (как в оригинальном Java коде)
 static int s_respawn_x = 0, s_respawn_y = 0;
+
+typedef struct {
+    unsigned char* data;
+    int size;
+} level_cache_entry_t;
+
+static level_cache_entry_t s_level_cache[MAX_LEVEL + 1];
+static int s_level_cache_preloaded = 0;
 
 // Формат пути к файлам уровней
 #define LEVEL_PATH_FORMAT "levels/J2MElvl.%03d"
@@ -106,21 +113,6 @@ texture_t* level_get_tileset(void) { return s_tileset; }
 int level_get_tiles_per_row(void) { return s_tiles_per_row; }
 
 
-/* --- Валидация масок коллизий ---
- * КРИТИЧНО: Маски коллизий в level_masks.inc жестко привязаны к тайлам 12x12 пикселя.
- * Эти маски определяют попикселльные формы коллизий для:
- * - Треугольных рамп (TRI_TILE_DATA[12][12])  
- * - Коллизий маленького мяча (SMALL_BALL_DATA[12][12])
- * 
- * При изменении TILE_SIZE все маски должны быть пересозданы в новом разрешении.
- */
-#if TILE_SIZE != 12
-#error "TILE_SIZE должен быть 12: маски коллизий в level_masks.inc привязаны к размеру 12x12 пикселя"
-#endif
-#include "level_masks.inc"
-
-
-
 Level g_level;
 
 // --- Текстуры/атлас (перенесены в начало файла) ---
@@ -137,24 +129,88 @@ static void level_load_tileset_once(void) {
     }
 }
 
-// --- Загрузка уровня из файла ---
-int level_load_from_file(const char* filename) {
+static int level_read_file_to_buffer(const char* filename, unsigned char** out_data, int* out_size) {
     FILE* file = util_open_file(filename, "rb");
     if (!file) return 0;
 
-    fseek(file, 0, SEEK_END);
+    if (fseek(file, 0, SEEK_END) != 0) {
+        fclose(file);
+        return 0;
+    }
+
     long fileSize = ftell(file);
-    fseek(file, 0, SEEK_SET);
-    if (fileSize < 8) { fclose(file); return 0; }
+    if (fileSize < 8 || fileSize > 0x7FFFFFFF) {
+        fclose(file);
+        return 0;
+    }
+
+    if (fseek(file, 0, SEEK_SET) != 0) {
+        fclose(file);
+        return 0;
+    }
 
     unsigned char* buffer = (unsigned char*)malloc((size_t)fileSize);
-    if (!buffer) { fclose(file); return 0; }
+    if (!buffer) {
+        fclose(file);
+        return 0;
+    }
 
     size_t bytesRead = fread(buffer, 1, (size_t)fileSize, file);
     fclose(file);
-    if (bytesRead != (size_t)fileSize) { free(buffer); return 0; }
+    if (bytesRead != (size_t)fileSize) {
+        free(buffer);
+        return 0;
+    }
 
-    int result = level_load_from_memory((const char*)buffer, (int)fileSize);
+    *out_data = buffer;
+    *out_size = (int)fileSize;
+    return 1;
+}
+
+static int level_cache_load_one(int levelNumber) {
+    if (levelNumber < 1 || levelNumber > MAX_LEVEL) {
+        return 0;
+    }
+
+    if (s_level_cache[levelNumber].data && s_level_cache[levelNumber].size > 0) {
+        return 1;
+    }
+
+    char filename[256];
+    snprintf(filename, sizeof(filename), LEVEL_PATH_FORMAT, levelNumber);
+
+    unsigned char* data = NULL;
+    int size = 0;
+    if (!level_read_file_to_buffer(filename, &data, &size)) {
+        return 0;
+    }
+
+    s_level_cache[levelNumber].data = data;
+    s_level_cache[levelNumber].size = size;
+    return 1;
+}
+
+static void level_cache_preload_all_once(void) {
+    if (s_level_cache_preloaded) {
+        return;
+    }
+
+    for (int level = 1; level <= MAX_LEVEL; ++level) {
+        (void)level_cache_load_one(level);
+    }
+
+    s_level_cache_preloaded = 1;
+}
+
+// --- Загрузка уровня из файла ---
+int level_load_from_file(const char* filename) {
+    unsigned char* buffer = NULL;
+    int fileSize = 0;
+    if (!level_read_file_to_buffer(filename, &buffer, &fileSize)) {
+        return 0;
+    }
+
+    int result = level_load_from_memory((const char*)buffer, fileSize);
     free(buffer);
     return result;
 }
@@ -162,11 +218,20 @@ int level_load_from_file(const char* filename) {
 // --- Загрузка уровня по номеру ---
 int level_load_by_number(int levelNumber) {
     level_load_tileset_once();
+    if (levelNumber < 1 || levelNumber > MAX_LEVEL) {
+        return 0;
+    }
+
+    level_cache_preload_all_once();
+
+    if (level_cache_load_one(levelNumber)) {
+        return level_load_from_memory((const char*)s_level_cache[levelNumber].data,
+                                      s_level_cache[levelNumber].size);
+    }
+
     char filename[256];
     snprintf(filename, sizeof(filename), LEVEL_PATH_FORMAT, levelNumber);
-    int result = level_load_from_file(filename);
-    
-    return result;
+    return level_load_from_file(filename);
 }
 
 // --- Парсер из памяти ---
@@ -620,7 +685,7 @@ uint8_t level_get_id(int tx, int ty) {
     if (tx < 0 || tx >= g_level.width || ty < 0 || ty >= g_level.height) {
         return 0; // За пределами карты - пустой тайл
     }
-    return (uint8_t)(g_level.tileMap[ty][tx] & TILE_CLEAN_MASK);
+    return (uint8_t)(g_level.tileMap[ty][tx] & TILE_ID_MASK);
 }
 
 // Установить ID тайла (сохраняя флаги)
@@ -669,6 +734,13 @@ void level_get_respawn(int* tx, int* ty) {
 
 // --- Cleanup function for resource deallocation ---
 void level_cleanup(void) {
+    for (int level = 1; level <= MAX_LEVEL; ++level) {
+        free(s_level_cache[level].data);
+        s_level_cache[level].data = NULL;
+        s_level_cache[level].size = 0;
+    }
+    s_level_cache_preloaded = 0;
+
     if (s_tileset) {
         png_free_texture(s_tileset);
         s_tileset = NULL;

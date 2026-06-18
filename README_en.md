@@ -1,68 +1,74 @@
+[Russian version](README.md)
+
 # Bounce Zero
 
 Port of the original game **Bounce (2002, Java/Sun for Nokia 7210)** to **PlayStation Portable (PSP)**.  
-The game logic is fully reimplemented in **C**, using only the original assets from the Nokia phone version.  
-This project is for research purposes and does not modify the original content.
+The game logic is fully rewritten in **C**, using only the original game assets from the Nokia phone version.  
+The project was created for research purposes, without modifying the content.
+
 
 ## Screenshots
-First screen  
+First screen
 ![BOUN01179_00000](docs/screenshots/BOUN01179_00000.jpg)
-Main menu / pause menu  
+Main menu / pause menu
 ![BOUN01179_00001](docs/screenshots/BOUN01179_00001.jpg)
-First level with HUD  
+First level with HUD
 ![BOUN01179_00002](docs/screenshots/BOUN01179_00002.jpg)
-Level select  
+Level select
 ![BOUN01179_00003](docs/screenshots/BOUN01179_00003.jpg)
-Third level  
+Third level
 ![BOUN01179_00004](docs/screenshots/BOUN01179_00004.jpg)
 
+
+
 ## Features
-- Reads and uses original game data from the 2002 JAR version of Bounce; includes the original Nokia 7210 font for authenticity
 - Full reimplementation of the game loop and physics
+- Reading and using original game data from the JAR version of Bounce 2002:
+    - level files 001-011: a J2ME level format parser implemented, with preloading/caching
+    - PNG textures: custom loader built on `stb_image` with texture placement in VRAM
+    - OTT sound files: RTTTL/OTT parser implemented with real-time PCM generation
+    - `lang` files: localization parser implemented with language selection based on PSP system language (with fallback to `lang.xx`)
+    - Nokia 7210 fonts (9, 12, 16, 23, 24): extracted from FONT.xml and packed into the CBMF binary format (T4-nibble); rendered via GU_PSM_T4 + CLUT on the PSP GU
+    - ability to select a level (1-11)
+    - save system via Sony PSP Savedata Utility (`DATA.BIN`, `SCE_UTILITY_SAVEDATA_*`)
 - Compatible with real PSP hardware and the PPSSPP emulator
-- Minimal system requirements, no external dependencies
+
+## Shortcomings, known issues
+- physics timer in the original is 33 frames, in this port — 30 frames — **fixed in 1.1**
+- fonts were rendered pixel-by-pixel without hardware acceleration — **fixed in 1.2** (migrated to CBMF + PSP GU T4/CLUT)
+- minor physics discrepancies, not affecting gameplay, will be corrected in a new version — **fixed in 1.1**
+
+## Cheat codes
+- During gameplay: `L + R` (press `L` while holding `R`) — toggles invincibility mode.
+- Effect: the ball does not pop from hazards (an early `return` fires in `pop_ball()`).
+- A sound signal plays when toggled.
 
 ## Build
-You need [PSP SDK (pspdev)](https://github.com/pspdev/pspdev) installed.
+You need [PSP SDK (pspdev)](https://github.com/pspdev/pspdev) installed. Then:
 
 ```bash
-sudo apt-get update
-sudo apt-get install build-essential cmake pkgconf libreadline8 libusb-0.1 libgpgme11 libarchive-tools fakeroot wget
-wget https://github.com/pspdev/pspdev/releases/latest/download/pspdev-ubuntu-latest-x86_64.tar.gz
-tar -xvf pspdev-ubuntu-latest-x86_64.tar.gz -C $HOME
-export PSPDEV="$HOME/pspdev"
-export PATH="$PATH:$PSPDEV/bin"
 make
 ```
 
 The resulting `EBOOT.PBP` will appear in the `release/` directory.
 
-## Tools
-The `tools/` folder contains utilities for generating fonts and atlases from source text data.  
-These scripts are not required for building the game, but they are useful for reproducing the font pipeline.
-Documentation for these tools is available in `docs/font_txt_format.md`.
-There is also `tools/grid_watcher_1.py` for viewing/checking the tile grid.
-
 ## Run
-Copy the contents of `release/` to your PSP memory card:
+Copy the contents of the `release/` folder to the PSP memory card:
 
 ```
 /PSP/GAME/BounceZero/
 ```
 
-Or open `EBOOT.PBP` in the PPSSPP emulator.
+or open `EBOOT.PBP` in the PPSSPP emulator.
 
 ## Compatibility
-- PlayStation Portable 6.00 or higher
+- PlayStation Portable 6.00 and higher
 - PPSSPP emulator
 
 ## License
-The source code is licensed under **MIT**.  
+The source code is distributed under the **MIT** license.  
 All original materials (*Bounce, 2002*) are owned by **Nokia** and/or **Sun Microsystems** and are used for research purposes only.
 
 ## About the experiment
 
-All source code was written using the **Claude AI** model  
-as part of a **vibe-coding** experiment — building a game engine  
-from behavioral and logic descriptions without manual programming.  
-This project exists for research purposes only.
+All source code was written using the **Claude AI** model as part of a **vibe-coding** experiment — recording a full project based on descriptions of behavior and logic, without manual programming.
