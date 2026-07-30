@@ -21,7 +21,7 @@ void level_flush_ring_foreground(void);
 // |   |-------- Водный флаг
 // |------------ Неиспользуемый бит
 #define TILE_FLAG_WATER    0x40  // Флаг водного тайла (как в Java) - бит 6
-#define TILE_ID_MASK       0x3F  // Маска для извлечения ID тайла (биты 0-5)
+#define TILE_ID_MASK       (~TILE_FLAG_WATER & ~0x80)  // Убрать флаги бит 6,7 (как Java: tile & ~64 & ~128)
 #define TILE_FLAGS_MASK    0x40  // Только флаг воды, без TILE_FLAG_MISC
 
 /* ---------------------------------------------------------------------------

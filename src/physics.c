@@ -7,9 +7,8 @@
 #include <stdlib.h>
 #include <assert.h>
 
-// Битовые маски для пиксельных коллизий
-// КРИТИЧНО: Маски коллизий привязаны к размеру тайла 12x12 пикселя из оригинальной Java-версии Bounce
-_Static_assert(TILE_SIZE == 12, "TILE_SIZE должен быть 12: маски коллизий в level_masks.inc жестко привязаны к размеру 12x12 пикселя из оригинальной игры Bounce. Для изменения размера потребуется регенерация всех масок коллизий.");
+// Битовые маски для пиксельных коллизий.
+_Static_assert(TILE_SIZE == 12, "TILE_SIZE must stay 12; collision masks in level_masks.inc are tied to 12x12 tiles.");
 #include "level_masks.inc"
 
 // Forward declarations
@@ -97,23 +96,19 @@ void player_init(Player* p, int x, int y, BallSizeState sizeState) {
     
     p->isInWater = false;
     
-    // Подталкивание большого мяча при инициализации в тесном месте (точно как в Java createBufferFocused:156-173)
+    // Подталкивание большого мяча при инициализации в тесном месте, как в оригинале.
     if (p->sizeState == LARGE_SIZE_STATE && !collisionDetection(p, p->xPos, p->yPos)) {
         int offset = STUCK_BALL_OFFSET;
         
-        // Точно 3 проверки как в оригинале:
+        // Порядок приоритета: влево, вверх, влево-вверх.
         if (collisionDetection(p, p->xPos - offset, p->yPos)) {
-            // 1. Влево
             p->xPos -= offset;
         } else if (collisionDetection(p, p->xPos, p->yPos - offset)) {
-            // 2. Вверх
             p->yPos -= offset;
         } else if (collisionDetection(p, p->xPos - offset, p->yPos - offset)) {
-            // 3. Влево-вверх
             p->xPos -= offset;
             p->yPos -= offset;
         }
-        // Если ни одно направление не подошло - оставляем как есть (как в оригинале)
     }
 }
 
@@ -132,33 +127,26 @@ void enlarge_ball(Player* p) {
     while (!found_free_space) {
         found_free_space = 1;
         
-        // Проверяем все 6 направлений в порядке приоритета как в Ball.java:
+        // Порядок приоритета направлений совпадает с оригиналом.
         if (collisionDetection(p, p->xPos, p->yPos - offset)) {
-            // 1. Вверх (приоритет)
             p->yPos -= offset;
         } else if (collisionDetection(p, p->xPos - offset, p->yPos - offset)) {
-            // 2. Лево-вверх
             p->xPos -= offset;
             p->yPos -= offset;
         } else if (collisionDetection(p, p->xPos + offset, p->yPos - offset)) {
-            // 3. Право-вверх
             p->xPos += offset;
             p->yPos -= offset;
         } else if (collisionDetection(p, p->xPos, p->yPos + offset)) {
-            // 4. Вниз
             p->yPos += offset;
         } else if (collisionDetection(p, p->xPos - offset, p->yPos + offset)) {
-            // 5. Лево-вниз
             p->xPos -= offset;
             p->yPos += offset;
         } else if (collisionDetection(p, p->xPos + offset, p->yPos + offset)) {
-            // 6. Право-вниз
             p->xPos += offset;
             p->yPos += offset;
         } else {
-            // Не нашли свободное место - увеличиваем радиус поиска
             found_free_space = 0;
-            offset++; // Java: b++
+            offset++;
         }
     }
 }
@@ -188,9 +176,6 @@ void pop_ball(Player* p) {
     
     p->ballState = BALL_STATE_POPPED;
     p->popCntr = POPPED_FRAMES;  // Анимация лопания (как в Java)
-    p->xSpeed = 0;
-    p->ySpeed = 0;
-    p->jumpOffset = 0;  // Сброс смещения прыжка
     
     // Воспроизводим звук лопания мяча
     sound_play_pop();
@@ -220,18 +205,16 @@ void release_direction(Player* p, MoveDirection dir) {
     }
 }
 
-// Пиксельная коллизия с квадратным тайлом (портировано из Ball.java)
+// Пиксельная коллизия с квадратным тайлом; структура близка к оригиналу.
 static bool squareCollide(Player* p, int tileRow, int tileCol) {
-    // Точная копия Java Ball.squareCollide()
-    int i = tileCol * 12;  // Java: int i = paramInt2 * 12
-    int j = tileRow * 12;  // Java: int j = paramInt1 * 12
+    int i = tileCol * 12;
+    int j = tileRow * 12;
 
-    int k = p->globalBallX - i;  // Java: int k = this.globalBallX - i
-    int m = p->globalBallY - j;  // Java: int m = this.globalBallY - j
+    int k = p->globalBallX - i;
+    int m = p->globalBallY - j;
 
     int x_start, x_end, y_start, y_end;
 
-    // Границы пересечения мяча с тайлом по X/Y (канон Java)
     if (k >= 0) {
         x_start = k;
         x_end = 12;
@@ -248,17 +231,13 @@ static bool squareCollide(Player* p, int tileRow, int tileCol) {
         y_end = p->ballSize + m;
     }
 
-    // Java: if (n > 12) n = 12; if (i1 > 12) i1 = 12;
     if (x_end > 12) x_end = 12;
     if (y_end > 12) y_end = 12;
 
-    // Выбор маски мяча как в Java - разные типы для разных размеров
     if (p->ballSize == 16) {
         const uint8_t (*largeBallData)[16] = (const uint8_t (*)[16])LARGE_BALL_DATA;
-        // Java: for (byte b3 = b1; b3 < n; b3++) for (byte b = b2; b < i1; b++)
         for (int b3 = x_start; b3 < x_end; b3++) {
             for (int b = y_start; b < y_end; b++) {
-                // Java: if (arrayOfByte[b - m][b3 - k] != 0) return true;
                 if (largeBallData[b - m][b3 - k] != 0) {
                     return true;
                 }
@@ -266,10 +245,8 @@ static bool squareCollide(Player* p, int tileRow, int tileCol) {
         }
     } else {
         const uint8_t (*smallBallData)[12] = (const uint8_t (*)[12])SMALL_BALL_DATA;
-        // Java: for (byte b3 = b1; b3 < n; b3++) for (byte b = b2; b < i1; b++)
         for (int b3 = x_start; b3 < x_end; b3++) {
             for (int b = y_start; b < y_end; b++) {
-                // Java: if (arrayOfByte[b - m][b3 - k] != 0) return true;
                 if (smallBallData[b - m][b3 - k] != 0) {
                     return true;
                 }
@@ -280,9 +257,9 @@ static bool squareCollide(Player* p, int tileRow, int tileCol) {
     return false;
 }
 
-// Коллизия с треугольной рампой (100% точный канон Java)
+// Коллизия с треугольной рампой, поведенчески эквивалентная оригиналу.
 static bool triangleCollide(Player* p, int tileRow, int tileCol, int tileID) {
-    // Точный канон Java: координаты тайла в пикселях
+    // Координаты тайла в пикселях.
     int i = tileCol * TILE_SIZE;  // paramInt2 * 12
     int j = tileRow * TILE_SIZE;  // paramInt1 * 12
     
@@ -290,7 +267,7 @@ static bool triangleCollide(Player* p, int tileRow, int tileCol, int tileID) {
     int k = p->globalBallX - i;
     int m = p->globalBallY - j;
     
-    // Смещения ориентации (канон Java)
+    // Смещения ориентации.
     int b1 = 0, b2 = 0;
     switch (tileID) {
         case 30: case 34:
@@ -305,14 +282,14 @@ static bool triangleCollide(Player* p, int tileRow, int tileCol, int tileID) {
         // case 32: case 36: без смещений
     }
     
-    // Границы цикла (канон Java)
+    // Границы цикла.
     int b3, n, b4, i1;
 
     // Вычисляем границы пересечения мяча с тайлом (используем общий helper)
     clip_to_tile_bounds(k, p->ballSize, &b3, &n);
     clip_to_tile_bounds(m, p->ballSize, &b4, &i1);
     
-    // Обрезка границ (канон Java)
+    // Обрезка границ.
     if (n > TILE_SIZE) n = TILE_SIZE;
     if (i1 > TILE_SIZE) i1 = TILE_SIZE;
     
@@ -390,9 +367,7 @@ static void redirectBall(Player* p, int tileID) {
             break;
             
         default:
-            // На всякий случай - если неизвестный тайл, останавливаем
-            p->xSpeed = 0;
-            p->ySpeed = 0;
+            // Сюда не должны попадать: redirectBall вызывается только для рамп 30-37.
             break;
     }
 }
@@ -442,7 +417,7 @@ static bool testTile(Player* p, int tileY, int tileX, bool canMove) {
     }
     
     if (p->ballState == BALL_STATE_POPPED) {
-        return true;  // Лопнувший мяч проходит сквозь все
+        return false;  // Лопнутый мяч не двигается и упирается в любое препятствие.
     }
     
     int tile = g_level.tileMap[tileY][tileX];
@@ -505,28 +480,28 @@ static bool testTile(Player* p, int tileY, int tileX, bool canMove) {
             if ((tileID == 13 || tileID == 14 || tileID == 15 || tileID == 16 || tileID == 17 || tileID == 18 || tileID == 19 || tileID == 20) && p->sizeState == LARGE_SIZE_STATE) {
                 canMove = false;
             } else {
-                // ВАЖНО: Нижняя половина вертикального кольца пропускает без твёрдой кромки (канон Java)
-                // Cases 14, 18, 22, 26 - все нижние части вертикальных колец НЕ используют edgeCollide
-                // Это создает реалистичную физику баскетбольного кольца: застрять можно на верхнем ободе,
-                // но снизу мяч проваливается свободно
-                if (tileID == 14 || tileID == 18 || tileID == 22 || tileID == 26) {
+                // Нижняя половина вертикального кольца пропускает мяч без твердой кромки.
+                if (tileID == 14 || tileID == 18 || tileID == 22) {
                     // Свободный проход через нижнюю часть кольца
                     if (tileID == 14 || tileID == 22) {
                         // Активные кольца - засчитываем проход
                         game_ring_collected(tileX, tileY, tileID);
                     }
-                    // Case 18, 26 (неактивные) - только проход без сбора
+                    // Неактивная нижняя половина кольца дает только проход без сбора.
                 } else {
                     // Остальные кольца проверяют edgeCollide для блокировки при касании края
-                    if (edgeCollide(p, tileY, tileX, tileID)) {
-                        canMove = false; // Блокируем движение при попадании в край (как в Java)
-                    } else {
-                        // Успешно прошли через центр кольца
-                        if ((tileID >= 13 && tileID <= 16) || (tileID >= 21 && tileID <= 24)) {
-                            // Активные кольца (маленькие 13-16 и большие 21-24) - засчитываем сбор
+                    bool edgeHit = edgeCollide(p, tileY, tileX, tileID);
+                    if (edgeHit) {
+                        canMove = false;
+                    }
+                    // ID 23: Pattern A — сбор только если НЕТ касания края (Java офсет 652-661)
+                    // ID 13,15,16,21,24: Pattern B — сбор всегда, независимо от края (Java офсет 1087-1093 и аналоги)
+                    if (tileID == 23) {
+                        if (!edgeHit) {
                             game_ring_collected(tileX, tileY, tileID);
                         }
-                        // Case 17-20, 25-28 (неактивные) - только проход без сбора
+                    } else if ((tileID >= 13 && tileID <= 16) || (tileID >= 21 && tileID <= 24)) {
+                        game_ring_collected(tileX, tileY, tileID);
                     }
                 }
                 // canMove может быть false если попали в край кольца
@@ -585,14 +560,14 @@ static bool testTile(Player* p, int tileY, int tileX, bool canMove) {
             game_set_respawn(tileX, tileY);  // Событие: чекпоинт активирован
             break;
             
-        // Выход (Java case 9: проверяет открыта ли дверь)
+        // Выход (Java case 9, офсет 1372-1415: сначала thinCollide, потом проверка двери)
         case TILE_EXIT:
-            if (game_exit_is_open()) {
-                // Дверь открыта - завершить уровень (как mExitFlag = true в Java)
-                game_complete_level();
-            } else {
-                // Дверь закрыта - заблокировать движение
-                return false;
+            if (thinCollide(p, tileY, tileX, tileID)) {
+                if (game_exit_is_open()) {
+                    game_complete_level();
+                } else {
+                    canMove = false;
+                }
             }
             break;
             
@@ -626,11 +601,10 @@ static bool testTile(Player* p, int tileY, int tileX, bool canMove) {
 }
 
 
-// Полностью портированная физика из Ball.java (100% Java-совместимая)
+// Основная физика игрока, сохраненная близкой к оригиналу.
 void player_update(Player* p) {
-    // Обработка анимации лопания (как в Java Ball.java:948-955)
+    // Обработка анимации лопания.
     if (p->ballState == BALL_STATE_POPPED) {
-        p->jumpOffset = 0;  // Сброс смещения при анимации
         p->popCntr--;       // Уменьшаем счетчик анимации
         if (p->popCntr == 0) {
             p->ballState = BALL_STATE_DEAD;  // Переход в состояние смерти
@@ -715,12 +689,10 @@ void player_update(Player* p) {
         p->slideCntr = 0;
     }
     
-    // Ограничение максимальной скорости (Java 969-978)
+    // Ограничение максимальной скорости.
     clamp_speed(p);
-
-    // Удалён неканоничный кламп X-скорости при вертикальном вводе
     
-    // === ФИЗИКА ПО ОСИ Y === (Java 980-1069)
+    // === ФИЗИКА ПО ОСИ Y ===
     for (int i = 0; i < abs(p->ySpeed) / MOVEMENT_STEP_DIVISOR; i++) {
         int yStep = 0;
         if (p->ySpeed != 0) {
@@ -828,7 +800,11 @@ void player_update(Player* p) {
         }
     }
 
-    // Накопление jumpOffset для большого мяча (Java 1118-1124)
+    // === УПРАВЛЕНИЕ ГОРИЗОНТАЛЬНЫМ ДВИЖЕНИЕМ === (Java аналог)
+    int maxSpeed = (p->speedBonusCntr > 0) ? MAX_HORZ_BONUS_SPEED : MAX_HORZ_SPEED;
+    if (p->speedBonusCntr > 0) p->speedBonusCntr--;
+
+    // Накопление jumpOffset для большого мяча (Java 1240-1284, после горизонтального ускорения)
     if (p->ballSize == ENLARGED_SIZE && p->jumpBonusCntr == 0) {
         if (reverseGrav) {
             p->jumpOffset += 5;
@@ -836,10 +812,6 @@ void player_update(Player* p) {
             p->jumpOffset += -5;
         }
     }
-    
-    // === УПРАВЛЕНИЕ ГОРИЗОНТАЛЬНЫМ ДВИЖЕНИЕМ === (Java аналог)
-    int maxSpeed = (p->speedBonusCntr > 0) ? MAX_HORZ_BONUS_SPEED : MAX_HORZ_SPEED;
-    if (p->speedBonusCntr > 0) p->speedBonusCntr--;
     
     if ((p->direction & MOVE_RIGHT) && p->xSpeed < maxSpeed) {
         p->xSpeed += HORZ_ACCELL;
@@ -861,20 +833,22 @@ void player_update(Player* p) {
         p->mGroundedFlag = false;
     }
     
-    // === ФИЗИКА ПО ОСИ X === (Java 1135-1166)
-    for (int i = 0; i < abs(p->xSpeed) / MOVEMENT_STEP_DIVISOR; i++) {
+    // === ФИЗИКА ПО ОСИ X ===
+    // Число X-подшагов вычисляется один раз до входа в цикл.
+    int xStepCount = abs(p->xSpeed) / MOVEMENT_STEP_DIVISOR;
+    for (int i = 0; i < xStepCount; i++) {
         int xStep = 0;
         if (p->xSpeed != 0) {
             xStep = (p->xSpeed < 0) ? -1 : 1;
         }
         
-        // Java 1142: обычное движение по X
+        // Обычное движение по X.
         if (collisionDetection(p, p->xPos + xStep, p->yPos)) {
             p->xPos += xStep;
         } else if (p->mCDRampFlag) {
-            // Java 1144-1164: диагональное скольжение по рампе
-            p->mCDRampFlag = false; // Java 1145: сброс, но может быть восстановлен в collisionDetection()
-            int diagonalStep = reverseGrav ? 1 : -1; // Java: bool ? 1 : -1
+            // Диагональное скольжение по рампе.
+            p->mCDRampFlag = false; // Флаг может быть выставлен заново внутри collisionDetection().
+            int diagonalStep = reverseGrav ? 1 : -1;
 
             // Пробуем диагональ 1: (xStep, diagonalStep)
             if (collisionDetection(p, p->xPos + xStep, p->yPos + diagonalStep)) {
@@ -886,18 +860,13 @@ void player_update(Player* p) {
                 p->xPos += xStep;
                 p->yPos -= diagonalStep;
             }
-            // Если диагонали не сработали - отскок
+            // Оригинал: если обе диагонали заблокированы, развернуть и вдвое
+            // уменьшить горизонтальную скорость (Ball bytecode 1536-1544).
             else {
-                // Java: this.xSpeed = -(this.xSpeed >> 1)
-                p->xSpeed = -(p->xSpeed >> 1);
-            }
-        } else {
-            // Обычный отскок без рампы
-            if (p->xSpeed != 0) {
-                // Java: this.xSpeed = -(this.xSpeed >> 1)
                 p->xSpeed = -(p->xSpeed >> 1);
             }
         }
+        // Без рампы движение по X просто блокируется, скорость не меняется.
     }
 
 }

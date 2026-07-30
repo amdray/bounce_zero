@@ -31,7 +31,6 @@ void game_state_update(void);
 void game_state_render(void);
 
 // Анимация двери
-void game_exit_open(void);
 void game_exit_reset(void);
 int game_exit_anim_offset(void);
 bool game_exit_is_open(void);

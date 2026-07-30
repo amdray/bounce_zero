@@ -17,9 +17,19 @@
 
 Game g_game;
 
-// Анимация двери (как в Java original)
-static int g_exit_animation_offset = 0;  // 0..24 пикселей смещения вверх
-static bool g_exit_is_opening = false;      // флаг активной анимации
+typedef enum {
+    EXIT_CLOSED = 0,
+    EXIT_WAITING_VISIBLE,
+    EXIT_OPENING,
+    EXIT_OPEN
+} ExitState;
+
+typedef struct {
+    ExitState state;
+    int animation_offset;
+} ExitController;
+
+static ExitController s_exit = { EXIT_CLOSED, 0 };
 
 // extern texture_t* g_tileset;
 // extern int g_tiles_per_row;
@@ -79,6 +89,83 @@ static inline int get_center_offset(void) {
     int levelPixelHeight = g_level.height * TILE_SIZE;
     int gameAreaHeight = SCREEN_HEIGHT - HUD_HEIGHT;
     return -(gameAreaHeight - levelPixelHeight) / 2;
+}
+
+// Единственный расчет камеры для игровой логики и рендера.
+static void game_calculate_camera(int* outCameraX, int* outCameraY) {
+    Player* player = &g_game.player;
+    int gameAreaHeight = SCREEN_HEIGHT - HUD_HEIGHT;
+    int cameraX = player->xPos - SCREEN_WIDTH / 2;
+
+    if (s_currentCameraY == CAMERA_UNINITIALIZED) {
+        s_currentCameraY = player->yPos - gameAreaHeight / 2;
+    }
+
+    int deadZoneTop = (gameAreaHeight * CAMERA_DEADZONE_PERCENT) / 100;
+    int deadZoneBottom = gameAreaHeight - deadZoneTop;
+
+    if (!is_level_small()) {
+        int playerScreenY = player->yPos - s_currentCameraY;
+        if (playerScreenY < deadZoneTop) {
+            s_currentCameraY = player->yPos - deadZoneTop;
+        } else if (playerScreenY > deadZoneBottom) {
+            s_currentCameraY = player->yPos - deadZoneBottom;
+        }
+    }
+
+    int cameraY = s_currentCameraY;
+    int maxCameraX = g_level.width * TILE_SIZE - SCREEN_WIDTH;
+    int maxCameraY = g_level.height * TILE_SIZE - gameAreaHeight;
+
+    if (cameraX < 0) cameraX = 0;
+    if (cameraX > maxCameraX && maxCameraX > 0) cameraX = maxCameraX;
+
+    if (is_level_small()) {
+        cameraY = get_center_offset();
+    } else {
+        if (cameraY < 0) cameraY = 0;
+        if (cameraY > maxCameraY && maxCameraY > 0) cameraY = maxCameraY;
+    }
+
+    *outCameraX = cameraX;
+    *outCameraY = cameraY;
+}
+
+static bool game_exit_is_visible(int cameraX, int cameraY) {
+    const int exitX = g_level.exitPosX * TILE_SIZE;
+    const int exitY = g_level.exitPosY * TILE_SIZE;
+    const int exitSize = 2 * TILE_SIZE;
+    const int gameAreaHeight = SCREEN_HEIGHT - HUD_HEIGHT;
+
+    return exitX < cameraX + SCREEN_WIDTH &&
+           exitX + exitSize > cameraX &&
+           exitY < cameraY + gameAreaHeight &&
+           exitY + exitSize > cameraY;
+}
+
+static void game_exit_arm(void) {
+    if (s_exit.state == EXIT_CLOSED) {
+        s_exit.state = EXIT_WAITING_VISIBLE;
+    }
+}
+
+static void game_exit_update(int cameraX, int cameraY) {
+    const bool isVisible = game_exit_is_visible(cameraX, cameraY);
+
+    if (s_exit.state == EXIT_WAITING_VISIBLE && isVisible) {
+        s_exit.state = EXIT_OPENING;
+    }
+
+    // Оригинал делает первый шаг openExit() в тот же тик,
+    // в котором дверь стала видима, и приостанавливает анимацию
+    // если дверь снова ушла за границы видимой области.
+    if (s_exit.state == EXIT_OPENING && isVisible) {
+        s_exit.animation_offset += 4;
+        if (s_exit.animation_offset >= 24) {
+            s_exit.animation_offset = 24;
+            s_exit.state = EXIT_OPEN;
+        }
+    }
 }
 
 void game_reset_camera(void) {
@@ -203,7 +290,7 @@ static void update_game(void) {
         release_direction(player, MOVE_UP);
     }
 
-    // Обновление физики игрока (частота 30 FPS управляется из main.c)
+    // Обновление физики игрока; тик 30 мс задается в main.c.
     player_update(player);
 
     // Обработка смерти игрока (как в Java BounceCanvas.java:569-580)
@@ -240,14 +327,15 @@ static void update_game(void) {
     // Обновление движущихся объектов
     level_update_moving_objects();
 
-    // Обновление анимации двери (как в Java openExit())
-    if (g_exit_is_opening) {
-        g_exit_animation_offset += 4;  // увеличиваем на 4 каждый кадр
-        if (g_exit_animation_offset >= 24) {
-            g_exit_animation_offset = 24;  // максимум 24 пикселя
-            g_exit_is_opening = false;        // анимация завершена
-        }
+    // Как в оригинале: после сбора всех колец дверь ждет,
+    // пока не попадет в видимую область, и только затем открывается.
+    if (g_game.numRings == g_level.totalRings) {
+        game_exit_arm();
     }
+
+    int cameraX, cameraY;
+    game_calculate_camera(&cameraX, &cameraY);
+    game_exit_update(cameraX, cameraY);
 
     // L+R = переключить читерское бессмертие (как mInvincible в Java)
     if (input_consume_pressed(PSP_CTRL_LTRIGGER) && input_held(PSP_CTRL_RTRIGGER)) {
@@ -272,52 +360,9 @@ static void render_game(void) {
 
     Player* player = &g_game.player;
 
-    // Горизонтальная камера - следует за игроком (как раньше)
-    int cameraX = player->xPos - SCREEN_WIDTH / 2;
-
-    // Вертикальная камера с мертвой зоной
-    if (s_currentCameraY == CAMERA_UNINITIALIZED) {
-        // Первая инициализация - только для больших уровней
-        int gameAreaHeight = SCREEN_HEIGHT - HUD_HEIGHT;
-        s_currentCameraY = player->yPos - gameAreaHeight / 2;
-    }
-
-    // Размеры мертвой зоны (только для игровой области)
     int gameAreaHeight = SCREEN_HEIGHT - HUD_HEIGHT;
-    int deadZoneTop = (gameAreaHeight * CAMERA_DEADZONE_PERCENT) / 100;
-    int deadZoneBottom = gameAreaHeight - deadZoneTop;
-
-    // Мертвая зона работает только для больших уровней
-    if (!is_level_small()) {
-        int tempPlayerScreenY = player->yPos - s_currentCameraY;
-
-        if (tempPlayerScreenY < deadZoneTop) {
-            // Игрок слишком высоко - двигаем камеру вверх
-            s_currentCameraY = player->yPos - deadZoneTop;
-        } else if (tempPlayerScreenY > deadZoneBottom) {
-            // Игрок слишком низко - двигаем камеру вниз
-            s_currentCameraY = player->yPos - deadZoneBottom;
-        }
-        // Иначе камера остается на месте (мертвая зона)
-    }
-
-    int cameraY = s_currentCameraY;
-
-    // Ограничиваем камеру границами уровня (учитываем игровую область)
-    int maxCameraX = g_level.width * TILE_SIZE - SCREEN_WIDTH;
-    int maxCameraY = g_level.height * TILE_SIZE - gameAreaHeight;
-
-    if (cameraX < 0) cameraX = 0;
-    if (cameraX > maxCameraX && maxCameraX > 0) cameraX = maxCameraX;
-
-    if (is_level_small()) {
-        // Для маленьких уровней фиксируем камеру по центру
-        cameraY = get_center_offset();
-    } else {
-        // Обычное ограничение для больших уровней
-        if (cameraY < 0) cameraY = 0;
-        if (cameraY > maxCameraY && maxCameraY > 0) cameraY = maxCameraY;
-    }
+    int cameraX, cameraY;
+    game_calculate_camera(&cameraX, &cameraY);
 
     // Рендерим уровень (исключая область HUD)
     level_set_ring_fg_defer(1);
@@ -639,37 +684,24 @@ void game_ring_collected(int tileX, int tileY, uint8_t tileID) {
     // 3. Воспроизводим звук кольца (up.ott)
     sound_play_hoop();
     
-    // 4. Если все кольца собраны - запускаем анимацию двери
-    if (g_game.numRings >= g_level.totalRings) {
-        game_exit_open();
-    }
 }
 
 // === АНИМАЦИЯ ДВЕРИ ===
 
-// Запуск анимации открытия двери (как в Java openExit())
-void game_exit_open(void) {
-    if (!g_exit_is_opening) {  // запускаем только если еще не открывается
-        g_exit_is_opening = true;
-        g_exit_animation_offset = 0;
-        // В оригинале дверь открывается без звука
-    }
-}
-
 // Сброс анимации двери при загрузке уровня
 void game_exit_reset(void) {
-    g_exit_animation_offset = 0;
-    g_exit_is_opening = false;
+    s_exit.state = EXIT_CLOSED;
+    s_exit.animation_offset = 0;
 }
 
 // Получить текущее смещение анимации двери для рендера
 int game_exit_anim_offset(void) {
-    return g_exit_animation_offset;
+    return s_exit.animation_offset;
 }
 
 // Проверить, завершена ли анимация открытия двери
 bool game_exit_is_open(void) {
-    return g_exit_animation_offset >= 24;
+    return s_exit.state == EXIT_OPEN;
 }
 
 // Проверить, можно ли продолжить сохраненную игру

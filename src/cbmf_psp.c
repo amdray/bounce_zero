@@ -157,12 +157,8 @@ static int psp_unpack_glyph_to_slot(
         memcpy(dst, src, glyph->row_bytes);
     }
 
-    sceKernelDcacheWritebackRange(
-        renderer->texture_pixels,
-        (size_t)renderer->texture_height * pitch_bytes
-    );
-
     renderer->slot_codepoints[slot] = glyph->codepoint;
+    renderer->texture_dirty = true;
     return CBMF_PSP_OK;
 }
 
@@ -208,6 +204,42 @@ static int psp_map_core_error(int rc) {
     return CBMF_PSP_ERR_BAD_DESC;
 }
 
+/*
+ * Establish the complete GU state required by this renderer for one text
+ * draw. The immutable CLUT turns the T4 texture into an alpha mask; vertex
+ * color supplies the requested text color. CLUT state belongs to the GU
+ * command stream, so it is rebound for every draw call.
+ */
+static void psp_bind_render_state(CbmfPspRenderer *renderer) {
+    sceGuClutMode(GU_PSM_8888, 0, 0xFF, 0);
+    sceGuClutLoad(2, renderer->clut);
+
+    sceGuTexMode(GU_PSM_T4, 0, 0, 0);
+    sceGuTexImage(0,
+        renderer->texture_width, renderer->texture_height,
+        renderer->texture_pitch,
+        renderer->texture_pixels);
+    sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
+    sceGuTexFilter(GU_NEAREST, GU_NEAREST);
+    sceGuTexWrap(GU_CLAMP, GU_CLAMP);
+}
+
+static void psp_sync_texture_if_dirty(CbmfPspRenderer *renderer) {
+    uint16_t pitch_bytes;
+
+    if (!renderer->texture_dirty) {
+        return;
+    }
+
+    pitch_bytes = (uint16_t)(renderer->texture_pitch >> 1);
+    sceKernelDcacheWritebackRange(
+        renderer->texture_pixels,
+        (size_t)renderer->texture_height * pitch_bytes
+    );
+    sceGuTexFlush();
+    renderer->texture_dirty = false;
+}
+
 static void psp_emit_glyph_quad(
     CbmfPspRenderer *renderer,
     uint16_t slot,
@@ -216,28 +248,14 @@ static void psp_emit_glyph_quad(
     const CbmfGlyphView *glyph,
     uint32_t color
 ) {
-    typedef struct { uint16_t u, v; int16_t x, y, z; } GlyphVert;
+    typedef struct {
+        uint16_t u, v;
+        uint32_t color;
+        int16_t x, y, z;
+        uint16_t pad;
+    } GlyphVert;
     GlyphVert *v;
     uint16_t u0, v0, u1, v1;
-
-    if (color != renderer->current_color) {
-        renderer->clut[0] = 0x00000000u;
-        renderer->clut[1] = color;
-        sceKernelDcacheWritebackRange(renderer->clut, 16 * sizeof(uint32_t));
-        sceGuClutMode(GU_PSM_8888, 0, 0xFF, 0);
-        sceGuClutLoad(2, renderer->clut);
-        renderer->current_color = color;
-    }
-
-    sceGuTexFlush();
-    sceGuTexMode(GU_PSM_T4, 0, 0, 0);
-    sceGuTexImage(0,
-        renderer->texture_width, renderer->texture_height,
-        renderer->texture_pitch,
-        renderer->texture_pixels);
-    sceGuTexFunc(GU_TFX_REPLACE, GU_TCC_RGBA);
-    sceGuTexFilter(GU_NEAREST, GU_NEAREST);
-    sceGuTexWrap(GU_CLAMP, GU_CLAMP);
 
     u0 = (uint16_t)((slot % renderer->slots_x) * renderer->slot_width);
     v0 = (uint16_t)((slot / renderer->slots_x) * renderer->slot_height);
@@ -246,12 +264,16 @@ static void psp_emit_glyph_quad(
 
     v = sceGuGetMemory(2 * sizeof(GlyphVert));
     v[0].u = u0; v[0].v = v0;
+    v[0].color = color;
     v[0].x = (int16_t)x;               v[0].y = (int16_t)y;               v[0].z = 0;
+    v[0].pad = 0;
     v[1].u = u1; v[1].v = v1;
+    v[1].color = color;
     v[1].x = (int16_t)(x + glyph->width); v[1].y = (int16_t)(y + glyph->height); v[1].z = 0;
+    v[1].pad = 0;
 
     sceGuDrawArray(GU_SPRITES,
-        GU_TEXTURE_16BIT | GU_VERTEX_16BIT | GU_TRANSFORM_2D,
+        GU_TEXTURE_16BIT | GU_COLOR_8888 | GU_VERTEX_16BIT | GU_TRANSFORM_2D,
         2, 0, v);
 }
 
@@ -303,7 +325,11 @@ int cbmf_psp_init(
     renderer->slot_count = desc->slot_count;
     renderer->slot_codepoints = desc->slot_codepoints;
     renderer->clut = desc->clut;
-    renderer->current_color = 0x00000000u;  /* sentinel: transparent, never a real text color */
+    renderer->texture_dirty = false;
+
+    memset(renderer->clut, 0, 16 * sizeof(uint32_t));
+    renderer->clut[1] = 0xFFFFFFFFu;
+    sceKernelDcacheWritebackRange(renderer->clut, 16 * sizeof(uint32_t));
 
     cbmf_psp_reset_cache(renderer);
     return CBMF_PSP_OK;
@@ -333,6 +359,11 @@ int cbmf_psp_draw_utf8(
     if (!renderer || !renderer->font || !text) {
         return CBMF_PSP_ERR_NULL;
     }
+    if (*text == '\0') {
+        return CBMF_PSP_OK;
+    }
+
+    psp_bind_render_state(renderer);
 
     p = text;
     pen_x = x;
@@ -360,6 +391,8 @@ int cbmf_psp_draw_utf8(
         if (rc != CBMF_PSP_OK) {
             return rc;
         }
+
+        psp_sync_texture_if_dirty(renderer);
 
         psp_emit_glyph_quad(
             renderer,

@@ -698,13 +698,10 @@ void level_set_id(int tx, int ty, uint8_t id) {
 }
 
 
-// Деактивировать старый чекпоинт (меняем ID с 7 на 8)
+// Деактивировать старый чекпоинт перед установкой нового respawn.
 void level_deactivate_old_checkpoint(void) {
     if (s_respawn_x >= 0 && s_respawn_x < g_level.width && s_respawn_y >= 0 && s_respawn_y < g_level.height) {
-        uint8_t currentId = level_get_id(s_respawn_x, s_respawn_y);
-        if (currentId == TILE_CHECKPOINT) {  // Если это активный чекпоинт (7)
-            level_set_id(s_respawn_x, s_respawn_y, TILE_CHECKPOINT_ON);  // Меняем на неактивный (8)
-        }
+        level_set_id(s_respawn_x, s_respawn_y, TILE_CHECKPOINT_ON);
     }
 }
 

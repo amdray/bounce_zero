@@ -1,6 +1,7 @@
 #ifndef CBMF_PSP_H
 #define CBMF_PSP_H
 
+#include <stdbool.h>
 #include <stdint.h>
 #include "cbmf.h"
 
@@ -8,7 +9,8 @@
  * PSP backend contract:
  * - storage: CBMF T4 nibble (PSP native, low nibble = even x, high nibble = odd x)
  * - runtime cache texture format: GU_PSM_T4
- * - glyph color via CLUT[1]; CLUT[0] = 0x00000000 (transparent)
+ * - immutable mask CLUT: index 0 is transparent, index 1 is opaque white
+ * - glyph color is vertex color, applied with GU_TFX_MODULATE
  * - no malloc/free
  * - cache slots are fixed grid cells
  * - cache eviction is round-robin
@@ -79,7 +81,7 @@ typedef struct {
     uint32_t *slot_codepoints;
 
     uint32_t *clut;
-    uint32_t current_color;
+    bool texture_dirty;
 
     /*
      * Round-robin eviction cursor.

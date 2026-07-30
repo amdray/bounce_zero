@@ -1,4 +1,4 @@
-[Russian version](README.md)
+[Russian version](README.md) · [Changelog](CHANGELOG.md)
 
 # Bounce Zero
 
